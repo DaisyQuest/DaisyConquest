@@ -1,16 +1,35 @@
 /* HexTile — single hex on the world map.
    Big size (120×138) and high-contrast borders so the territory grid reads
-   instantly. */
+   instantly.
+
+   Visibility states:
+   - !explored        → fogged silhouette (no terrain hint, no town, no owner)
+   - explored && !visible → dim terrain, no live garrison/owner overlay
+   - visible              → full render */
 import { TERRAINS, TOWN_TYPES } from "../data/map.js";
 import { FACTIONS } from "../data/factions.js";
 
-export function HexTile({ tile, selected, hovered, isAdjacentToActive, onClick, onHover }) {
+export function HexTile({
+  tile,
+  selected,
+  hovered,
+  isAdjacentToActive,
+  visible = true,
+  justRevealed = false,
+  onClick,
+  onHover,
+}) {
   const terr = TERRAINS[tile.terrain];
-  const fac = tile.owner ? FACTIONS[tile.owner] : null;
-  const town = tile.town ? TOWN_TYPES[tile.town] : null;
-  const garrisonCount = (tile.garrison || []).reduce((s, g) => s + g.count, 0);
+  const explored = !!tile.explored;
+  const fogged = !explored;
+  // Owner/town/garrison only render when currently visible.
+  const fac = visible && tile.owner ? FACTIONS[tile.owner] : null;
+  const town = explored && tile.town ? TOWN_TYPES[tile.town] : null;
+  const garrisonCount = visible
+    ? (tile.garrison || []).reduce((s, g) => s + g.count, 0)
+    : 0;
 
-  const fillBase = terr.color;
+  const fillBase = fogged ? "#3a2e22" : terr.color;
   const ownerOverlay = fac ? fac.palette.primary : null;
   const gradId = `tg_${tile.id}`;
 
@@ -21,15 +40,26 @@ export function HexTile({ tile, selected, hovered, isAdjacentToActive, onClick, 
       activate();
     }
   };
-  const ariaLabel = [
-    town?.name || terr.name,
-    fac ? fac.short : tile.owner ? "" : "unclaimed",
-    garrisonCount ? `garrison ${garrisonCount}` : "",
-  ].filter(Boolean).join(", ");
+  const ariaLabel = fogged
+    ? "uncharted territory"
+    : [
+        town?.name || terr.name,
+        fac ? fac.short : tile.owner && visible ? "" : "unclaimed",
+        garrisonCount ? `garrison ${garrisonCount}` : "",
+      ].filter(Boolean).join(", ");
+
+  const classes = [
+    "hex",
+    "hex-big",
+    selected ? "selected" : "",
+    terr.impassable ? "disabled" : "",
+    fogged ? "fogged" : explored && !visible ? "explored" : "",
+    justRevealed ? "just-revealed" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div
-      className={`hex hex-big ${selected ? "selected" : ""} ${terr.impassable ? "disabled" : ""}`}
+      className={classes}
       style={{ left: tile.x, top: tile.y }}
       role={terr.impassable ? undefined : "button"}
       tabIndex={terr.impassable ? -1 : 0}
@@ -85,8 +115,8 @@ export function HexTile({ tile, selected, hovered, isAdjacentToActive, onClick, 
         <div style={{
           fontSize: 36, lineHeight: 1, marginTop: 8,
           filter: "drop-shadow(0 2px 0 rgba(0,0,0,0.25))",
-        }}>{town?.icon || terr.icon}</div>
-        {town && (
+        }}>{fogged ? "🌫️" : (town?.icon || terr.icon)}</div>
+        {town && !fogged && (
           <div className="h-display" style={{
             fontSize: 11, marginTop: 4,
             color: "var(--ink)", textShadow: "0 1px 0 rgba(255,255,255,0.4)",

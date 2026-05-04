@@ -30,7 +30,7 @@ import { FACTIONS, FACTION_LIST } from "../data/factions.js";
 import { HEROES, heroXpForLevel } from "../data/heroes.js";
 import { ITEMS } from "../data/items.js";
 import { ENCOUNTERS } from "../data/encounters.js";
-import { generateMap, TERRAINS, TOWN_TYPES } from "../data/map.js";
+import { generateMap, revealAround, TERRAINS, TOWN_TYPES } from "../data/map.js";
 import { AI } from "../systems/ai.js";
 
 const StoreCtx = createContext(null);
@@ -40,7 +40,10 @@ export function makeInitialState(opts = {}) {
   const human = opts.human ?? "crown";
   const coopWith = opts.coopWith ?? null;
 
-  const map = generateMap(seed, { cols: CONST.MAP.COLS, rows: CONST.MAP.ROWS });
+  const baseMap = generateMap(seed, { cols: CONST.MAP.COLS, rows: CONST.MAP.ROWS });
+  // Initial reveal: capitals + neighbors of human (and coop ally, if any).
+  const humanIds = [human, coopWith].filter(Boolean);
+  const map = { ...baseMap, tiles: revealAround(baseMap.tiles, humanIds) };
 
   const players = {};
   for (const fid of FACTION_LIST) {
@@ -126,6 +129,13 @@ function checkVictory(state, players) {
     return { winner: null, defeated: humanFid, round: state.round };
   }
   return null;
+}
+
+/* Reveal tiles owned by the human (and co-op ally, if any) plus their
+   neighbors. Called from every reducer branch where a human gains a tile;
+   `explored` is monotonic, so it's safe to over-call. */
+function revealForHumans(state, tiles) {
+  return revealAround(tiles, [state.humanFaction, state.coopFaction]);
 }
 
 /* Compose defeat-check + victory-check after any tile-ownership change.
@@ -250,13 +260,13 @@ export function gameReducer(state, action) {
         }
         target.owner = me;
         const log = [...state.log, { round: state.round, text: `${FACTIONS[me].short} secured ${terr.name}.` }];
-        return { ...state, map: { ...state.map, tiles }, log };
+        return { ...state, map: { ...state.map, tiles: revealForHumans(state, tiles) }, log };
       }
       // 5. Empty enemy tile (rare) — just claim
       if (target.owner && target.owner !== me) {
         target.owner = me;
         target.garrison = [];
-        return { ...state, map: { ...state.map, tiles } };
+        return { ...state, map: { ...state.map, tiles: revealForHumans(state, tiles) } };
       }
       // 6. Already mine — no-op
       return state;
@@ -381,7 +391,8 @@ export function gameReducer(state, action) {
             : [];
         }
       }
-      const dv = applyDefeatAndVictory(state, players, tiles);
+      const revealed = revealForHumans(state, tiles);
+      const dv = applyDefeatAndVictory(state, players, revealed);
       const nextScreen = dv.screen || "summary";
       return {
         ...state,
@@ -389,7 +400,7 @@ export function gameReducer(state, action) {
         pendingBattle: null,
         pendingSummary: { ...action.result, tileId: action.tileId, attacker: action.attacker, defender: action.defender },
         pendingVictory: dv.pendingVictory ?? state.pendingVictory,
-        map: { ...state.map, tiles },
+        map: { ...state.map, tiles: revealed },
         players: dv.players,
       };
     }
@@ -416,7 +427,7 @@ export function gameReducer(state, action) {
       return {
         ...state,
         players,
-        map: { ...state.map, tiles },
+        map: { ...state.map, tiles: revealForHumans(state, tiles) },
         log,
         pendingEncounter: null,
         screen: "map",

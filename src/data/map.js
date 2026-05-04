@@ -66,7 +66,7 @@ export function generateMap(seed = 1, opts = {}) {
         town: null,
         garrison: [],
         gold: TERRAINS[terrain].income,
-        revealed: true,
+        explored: false,
       });
     }
   }
@@ -151,4 +151,23 @@ export function hexNeighbors(tile, allTiles) {
   return dirs
     .map(([dq, dr]) => allTiles.find((t) => t.q === tile.q + dq && t.r === tile.r + dr))
     .filter(Boolean);
+}
+
+/* Mark every tile owned by one of `ownerIds` (and its neighbors) as
+   explored. Returns a new tile array. Pure function — used by the reducer
+   any time a player's owned-tile set may have changed. */
+export function revealAround(tiles, ownerIds) {
+  const wantSet = new Set(ownerIds.filter(Boolean));
+  if (wantSet.size === 0) return tiles;
+  const out = tiles.map((t) => ({ ...t }));
+  const byId = new Map(out.map((t) => [t.id, t]));
+  for (const t of out) {
+    if (!wantSet.has(t.owner)) continue;
+    t.explored = true;
+    for (const n of hexNeighbors(t, out)) {
+      const n2 = byId.get(n.id);
+      if (n2) n2.explored = true;
+    }
+  }
+  return out;
 }

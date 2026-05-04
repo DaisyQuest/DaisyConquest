@@ -248,12 +248,47 @@ html, body {
   position: absolute;
   width: 80px; height: 92px;
   cursor: pointer;
-  transition: transform 120ms, filter 120ms;
+  transition: transform 120ms, filter 120ms, opacity 240ms;
 }
 .hex.hex-big { width: 120px; height: 138px; }
 .hex:hover { transform: scale(1.04); z-index: 10; filter: brightness(1.08); }
 .hex.selected { transform: scale(1.06); z-index: 20; filter: brightness(1.15) drop-shadow(0 0 12px var(--gold)); }
 .hex.disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* === Fog of war ===
+   Three states applied via class:
+   - .fogged   → never seen; render silhouette, hide details
+   - .explored → seen before but not currently visible; dim, no garrison
+   - (none)    → currently visible; full render */
+.hex.fogged {
+  filter: brightness(0.55) saturate(0.4);
+  opacity: 0.9;
+}
+.hex.fogged:hover {
+  /* still hoverable (cursor: pointer) so clicks plan toward unknown tiles,
+     but the brightness boost is muted */
+  filter: brightness(0.70) saturate(0.5);
+  transform: scale(1.02);
+}
+.hex.explored {
+  filter: brightness(0.78) saturate(0.7);
+  opacity: 0.92;
+}
+.hex.explored:hover {
+  filter: brightness(0.92) saturate(0.85);
+}
+
+/* Reveal animation — applied for one render when a tile transitions
+   from fogged to explored. Use a CSS animation so it auto-runs once. */
+@keyframes hexReveal {
+  0%   { transform: scale(0.85); filter: brightness(1.4) saturate(0.8); }
+  60%  { transform: scale(1.06); filter: brightness(1.2) saturate(1.1); }
+  100% { transform: scale(1);    filter: none; }
+}
+.hex.just-revealed {
+  animation: hexReveal 480ms ease-out;
+  z-index: 15;
+}
 
 /* === Battlefield === */
 .battlefield { background: #4a3a26; }
