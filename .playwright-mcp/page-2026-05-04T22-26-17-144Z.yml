@@ -1,0 +1,301 @@
+- generic [ref=e3]:
+  - generic [ref=e56]:
+    - generic [ref=e57]:
+      - generic [ref=e58]:
+        - img [ref=e59]
+        - generic [ref=e62]: 👑
+      - generic [ref=e63]:
+        - generic [ref=e64]: Iron Crowns
+        - generic [ref=e65]: Iron Crown
+    - generic [ref=e66]:
+      - button "🗺️ Map" [ref=e67] [cursor=pointer]:
+        - generic [ref=e68]: 🗺️
+        - text: Map
+      - button "⚔️ Recruit" [ref=e69] [cursor=pointer]:
+        - generic [ref=e70]: ⚔️
+        - text: Recruit
+      - button "👑 Hero" [ref=e71] [cursor=pointer]:
+        - generic [ref=e72]: 👑
+        - text: Hero
+      - button "🏪 Shop" [ref=e73] [cursor=pointer]:
+        - generic [ref=e74]: 🏪
+        - text: Shop
+    - generic [ref=e75]:
+      - generic [ref=e76]:
+        - generic [ref=e77]: Round
+        - generic [ref=e78]: "1"
+      - generic [ref=e80]:
+        - generic [ref=e81]: Gold
+        - generic [ref=e82]: "200"
+      - generic [ref=e83]:
+        - generic [ref=e84]: +78/r
+        - generic [ref=e85]: −41/r
+      - button "End Round ▶" [ref=e86] [cursor=pointer]
+  - generic [ref=e87]:
+    - generic [ref=e89]:
+      - generic [ref=e90] [cursor=pointer]:
+        - img [ref=e91]
+        - generic:
+          - generic: 🏘️
+          - generic: Town
+          - generic: "4"
+          - generic: 👑
+      - generic [ref=e94] [cursor=pointer]:
+        - img [ref=e95]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e98] [cursor=pointer]:
+        - img [ref=e99]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e102] [cursor=pointer]:
+        - img [ref=e103]
+        - generic:
+          - generic: 🏘️
+          - generic: Town
+          - generic: "4"
+          - generic: 👑
+      - generic [ref=e106]:
+        - img [ref=e107]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e110]:
+        - img [ref=e111]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e113]:
+        - img [ref=e114]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e116]:
+        - img [ref=e117]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e119] [cursor=pointer]:
+        - img [ref=e120]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e123] [cursor=pointer]:
+        - img [ref=e124]
+        - generic:
+          - generic: 🏰
+          - generic: Capital
+          - generic: "9"
+          - generic: 👑
+      - generic [ref=e127] [cursor=pointer]:
+        - img [ref=e128]
+        - generic:
+          - generic: 🌾
+      - generic [ref=e131] [cursor=pointer]:
+        - img [ref=e132]
+        - generic:
+          - generic: 🛡️
+          - generic: Fort
+          - generic: "3"
+          - generic: 👑
+      - generic [ref=e135] [cursor=pointer]:
+        - img [ref=e136]
+        - generic:
+          - generic: 🏯
+          - generic: City
+          - generic: "3"
+          - generic: ⚓
+      - generic [ref=e140] [cursor=pointer]:
+        - img [ref=e141]
+        - generic:
+          - generic: 🌾
+      - generic [ref=e143] [cursor=pointer]:
+        - img [ref=e144]
+        - generic:
+          - generic: 🏰
+          - generic: Capital
+          - generic: "9"
+          - generic: ⚓
+      - generic [ref=e147] [cursor=pointer]:
+        - img [ref=e148]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e150] [cursor=pointer]:
+        - img [ref=e151]
+        - generic:
+          - generic: 🏯
+          - generic: City
+          - generic: "2"
+          - generic: 👑
+      - generic [ref=e154] [cursor=pointer]:
+        - img [ref=e155]
+        - generic:
+          - generic: ⛰️
+      - generic [ref=e158] [cursor=pointer]:
+        - img [ref=e159]
+        - generic:
+          - generic: 🌾
+      - generic [ref=e162] [cursor=pointer]:
+        - img [ref=e163]
+        - generic:
+          - generic: 🛡️
+          - generic: Fort
+          - generic: "2"
+          - generic: 👑
+      - generic [ref=e166] [cursor=pointer]:
+        - img [ref=e167]
+        - generic:
+          - generic: 🕳️
+          - generic: Cave
+      - generic [ref=e170] [cursor=pointer]:
+        - img [ref=e171]
+        - generic:
+          - generic: 🗿
+          - generic: Ruin
+      - generic [ref=e173] [cursor=pointer]:
+        - img [ref=e174]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e176]:
+        - img [ref=e177]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e179]:
+        - img [ref=e180]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e183] [cursor=pointer]:
+        - img [ref=e184]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e187] [cursor=pointer]:
+        - img [ref=e188]
+        - generic:
+          - generic: 🏘️
+          - generic: Town
+          - generic: "4"
+          - generic: 👑
+      - generic [ref=e191] [cursor=pointer]:
+        - img [ref=e192]
+        - generic:
+          - generic: 🕳️
+          - generic: Cave
+      - generic [ref=e195] [cursor=pointer]:
+        - img [ref=e196]
+        - generic:
+          - generic: 🏯
+          - generic: City
+          - generic: "4"
+          - generic: 🜂
+      - generic [ref=e199] [cursor=pointer]:
+        - img [ref=e200]
+        - generic:
+          - generic: ⛰️
+      - generic [ref=e202] [cursor=pointer]:
+        - img [ref=e203]
+        - generic:
+          - generic: 🌾
+      - generic [ref=e205]:
+        - img [ref=e206]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e208] [cursor=pointer]:
+        - img [ref=e209]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e211] [cursor=pointer]:
+        - img [ref=e212]
+        - generic:
+          - generic: 🏰
+          - generic: Capital
+          - generic: "9"
+          - generic: ✦
+      - generic [ref=e215] [cursor=pointer]:
+        - img [ref=e216]
+        - generic:
+          - generic: ⛰️
+      - generic [ref=e219] [cursor=pointer]:
+        - img [ref=e220]
+        - generic:
+          - generic: 🌾
+      - generic [ref=e223] [cursor=pointer]:
+        - img [ref=e224]
+        - generic:
+          - generic: 🏘️
+          - generic: Town
+          - generic: "2"
+          - generic: 🜂
+      - generic [ref=e227] [cursor=pointer]:
+        - img [ref=e228]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e230] [cursor=pointer]:
+        - img [ref=e231]
+        - generic:
+          - generic: 🏰
+          - generic: Capital
+          - generic: "9"
+          - generic: 🜂
+      - generic [ref=e234] [cursor=pointer]:
+        - img [ref=e235]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e237]:
+        - img [ref=e238]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e240] [cursor=pointer]:
+        - img [ref=e241]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e243]:
+        - img [ref=e244]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e247] [cursor=pointer]:
+        - img [ref=e248]
+        - generic:
+          - generic: 🏯
+          - generic: City
+          - generic: "3"
+          - generic: ✦
+      - generic [ref=e251] [cursor=pointer]:
+        - img [ref=e252]
+        - generic:
+          - generic: 🛕
+          - generic: Shrine
+      - generic [ref=e254]:
+        - img [ref=e255]
+        - generic:
+          - generic: 🌊
+      - generic [ref=e257] [cursor=pointer]:
+        - img [ref=e258]
+        - generic:
+          - generic: 🏖️
+      - generic [ref=e260]:
+        - img [ref=e261]
+        - generic:
+          - generic: 🌊
+    - generic [ref=e263]:
+      - generic [ref=e265]:
+        - generic [ref=e266]: 🤴
+        - generic [ref=e267]:
+          - generic [ref=e268]:
+            - generic [ref=e269]: Warlord
+            - generic [ref=e270]: Lv 1
+          - generic [ref=e271]: House of the Iron Crown
+          - generic [ref=e272]:
+            - generic [ref=e273]:
+              - generic [ref=e274]: HP
+              - generic [ref=e275]: 80/80
+            - generic [ref=e278]:
+              - generic [ref=e279]: MP
+              - generic [ref=e280]: 30/30
+            - generic [ref=e283]:
+              - generic [ref=e284]: XP
+              - generic [ref=e285]: 0/182
+      - generic [ref=e287]:
+        - generic [ref=e288]: Selected Region
+        - generic [ref=e289]: Click a hex to inspect.
+      - generic [ref=e290]:
+        - generic [ref=e291]: Chronicle
+        - generic [ref=e293]:
+          - generic [ref=e294]: R1
+          - text: · The kingdoms are at war. Take the throne.
+      - button "← Title Screen" [ref=e295] [cursor=pointer]
+  - button "Toggle tweaks panel" [ref=e55] [cursor=pointer]: ⚙

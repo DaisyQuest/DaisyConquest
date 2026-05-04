@@ -1,0 +1,43 @@
+- generic [ref=e3]:
+  - generic [ref=e6]:
+    - generic [ref=e7]: Iron Crowns
+    - generic [ref=e8]: Four houses. One throne. Take what is yours.
+    - generic [ref=e9]:
+      - generic [ref=e10]: Choose Your House
+      - generic [ref=e11]:
+        - generic [ref=e12] [cursor=pointer]:
+          - generic [ref=e13]:
+            - img [ref=e14]
+            - generic [ref=e17]: 👑
+          - generic [ref=e18]: Iron Crown
+          - generic [ref=e19]: By Steel, By Right.
+        - generic [ref=e20] [cursor=pointer]:
+          - generic [ref=e21]:
+            - img [ref=e22]
+            - generic [ref=e25]: ⚓
+          - generic [ref=e26]: Saltborn
+          - generic [ref=e27]: From the Deep, Unending.
+        - generic [ref=e28] [cursor=pointer]:
+          - generic [ref=e29]:
+            - img [ref=e30]
+            - generic [ref=e33]: ✦
+          - generic [ref=e34]: Ashen
+          - generic [ref=e35]: What is Burned is Bound.
+        - generic [ref=e36] [cursor=pointer]:
+          - generic [ref=e37]:
+            - img [ref=e38]
+            - generic [ref=e41]: 🜂
+          - generic [ref=e42]: Thornwild
+          - generic [ref=e43]: Roots Drink Deep.
+    - generic [ref=e44]:
+      - generic [ref=e45]: Co-op Ally (optional)
+      - generic [ref=e46]:
+        - button "Solo" [ref=e47] [cursor=pointer]
+        - button "⚓ Saltborn" [ref=e48] [cursor=pointer]
+        - button "✦ Ashen" [ref=e49] [cursor=pointer]
+        - button "🜂 Thornwild" [ref=e50] [cursor=pointer]
+    - generic [ref=e51]:
+      - button "⚔ Begin Campaign" [ref=e52] [cursor=pointer]
+      - button "Continue" [ref=e53] [cursor=pointer]
+      - button "🤝 Multiplayer Lobby" [ref=e54] [cursor=pointer]
+  - button "Toggle tweaks panel" [ref=e55] [cursor=pointer]: ⚙
