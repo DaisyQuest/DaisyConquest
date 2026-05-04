@@ -417,6 +417,29 @@ html, body {
 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); display: inline-block; }
 
+/* === Auto-update banner (Electron only) === */
+.update-banner {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 1100;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  background: var(--ink);
+  color: var(--bg-1);
+  border: 2px solid var(--gold);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  animation: slide-up 280ms ease-out;
+}
+.update-banner .btn {
+  margin-left: 4px;
+}
+
 /* Faction tinting helper */
 .tint-crown { --tint: var(--f-crown-a); --tint2: var(--f-crown-b); }
 .tint-tide  { --tint: var(--f-tide-a);  --tint2: var(--f-tide-b);  }

@@ -2,6 +2,7 @@
 import { useStore } from "./core/store.jsx";
 import { GoldBar } from "./components/GoldBar.jsx";
 import { TweaksPanel } from "./components/TweaksPanel.jsx";
+import { UpdateBanner } from "./components/UpdateBanner.jsx";
 
 import { MainMenu } from "./screens/MainMenu.jsx";
 import { WorldMap } from "./screens/WorldMap.jsx";
@@ -52,6 +53,7 @@ export function App() {
           : <div style={{ padding: 40 }}>Unknown screen: {screen}</div>}
       </div>
       <TweaksPanel />
+      <UpdateBanner />
     </div>
   );
 }
