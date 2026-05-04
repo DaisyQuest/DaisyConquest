@@ -14,6 +14,12 @@ import { HEROES } from "../data/heroes.js";
 
 const C = () => CONST.BATTLE;
 
+function heroHasPerk(bs, side, perkId) {
+  const hero = bs.fighters.find((f) => f.kind === "hero" && f.side === side);
+  if (!hero) return false;
+  return (hero.perks || []).includes(perkId);
+}
+
 function makeFighter(unitId, side, lane, idx, fac) {
   const u = UNITS[unitId];
   return {
@@ -27,6 +33,7 @@ function makeFighter(unitId, side, lane, idx, fac) {
     atkCd: 0, alive: true,
     target: null,
     role: u.role,
+    didCharge: false,
   };
 }
 
@@ -59,6 +66,7 @@ function makeHeroFighter(hero, side, fac) {
     cooldowns: {},
     abilities: def.abilities,
     perks: hero.perks || [],
+    didCharge: false,
   };
 }
 
@@ -101,6 +109,7 @@ export const Battle = {
       attackerStart: snapshotCounts(attackerRetinue),
       defenderStart: snapshotCounts(defenderGarrison),
       floats: [],
+      timers: [],
     };
   },
 
@@ -108,6 +117,18 @@ export const Battle = {
     if (bs.ended) return bs;
     bs.time += dt;
     const tickEvents = [];
+
+    if (bs.timers && bs.timers.length) {
+      const remaining = [];
+      for (const t of bs.timers) {
+        if (bs.time >= t.deadline) {
+          t.undo();
+        } else {
+          remaining.push(t);
+        }
+      }
+      bs.timers = remaining;
+    }
 
     for (const f of bs.fighters) {
       if (!f.alive) continue;
@@ -139,9 +160,41 @@ export const Battle = {
         f.x += dir * f.spd * CONST.BATTLE.UNIT_MOVE_SCALE * dt;
       } else if (f.atkCd <= 0) {
         const variance = (Math.random() - 0.5) * 2 * CONST.BATTLE.DAMAGE_VARIANCE;
-        let dmg = Math.max(1, Math.round(f.atk * (1 + variance) - target.def * 0.5));
-        if (f.traits.includes("crit") && Math.random() < 0.2) dmg = Math.round(dmg * 1.6);
+        // perk_shieldwall: +15% def to vanguard troops on the defender's side
+        let effDef = target.def;
+        if (target.role === "vanguard" && heroHasPerk(bs, target.side, "perk_shieldwall")) {
+          effDef = effDef * 1.15;
+        }
+        // perk_apex (defender hero, low HP): +30% def
+        if (target.kind === "hero"
+            && target.hp / target.maxHp < 0.35
+            && heroHasPerk(bs, target.side, "perk_apex")) {
+          effDef = effDef * 1.3;
+        }
+        let dmg = Math.max(1, Math.round(f.atk * (1 + variance) - effDef * 0.5));
+        let isCrit = false;
+        if (f.traits.includes("crit") && Math.random() < 0.2) {
+          dmg = Math.round(dmg * 1.6);
+          isCrit = true;
+        }
         if (f.traits.includes("frenzy")) dmg = Math.round(dmg * (1 + (1 - f.hp / f.maxHp) * 0.4));
+        // perk_strike: +10% melee damage when attacker is range 1 and same-side hero has it
+        if (f.range === 1 && heroHasPerk(bs, f.side, "perk_strike")) {
+          dmg = Math.round(dmg * 1.1);
+        }
+        // perk_lance: +25% on charge (first attack) for mounted units (knight, or vanguard with "charge")
+        const isMounted = f.unitId === "knight"
+          || (f.role === "vanguard" && f.traits.includes("charge"));
+        if (isMounted && !f.didCharge && heroHasPerk(bs, f.side, "perk_lance")) {
+          dmg = Math.round(dmg * 1.25);
+        }
+        if (isMounted && !f.didCharge) f.didCharge = true;
+        // perk_apex (attacker hero, low HP): +30% atk effectively
+        if (f.kind === "hero"
+            && f.hp / f.maxHp < 0.35
+            && heroHasPerk(bs, f.side, "perk_apex")) {
+          dmg = Math.round(dmg * 1.3);
+        }
         target.hp -= dmg;
         bs.floats.push({
           id: Math.random().toString(36).slice(2),
@@ -150,6 +203,28 @@ export const Battle = {
         });
         f.atkCd = CONST.BATTLE.ATTACK_COOLDOWN;
         tickEvents.push({ kind: "hit", from: f.uid, to: target.uid, dmg });
+        // perk_decap: crits restore 5 MP to the attacker's side hero
+        if (isCrit && heroHasPerk(bs, f.side, "perk_decap")) {
+          const sideHero = bs.fighters.find((h) => h.kind === "hero" && h.side === f.side && h.alive);
+          if (sideHero) sideHero.mp = Math.min(sideHero.maxMp, sideHero.mp + 5);
+        }
+        // perk_thornarmor: reflect 20% melee damage back to attacker
+        if (f.range === 1 && heroHasPerk(bs, target.side, "perk_thornarmor") && f.alive) {
+          const reflect = Math.round(dmg * 0.2);
+          if (reflect > 0) {
+            f.hp -= reflect;
+            bs.floats.push({
+              id: Math.random().toString(36).slice(2),
+              x: f.x, lane: f.lane, side: f.side,
+              text: `-${reflect}`, t: 0,
+            });
+            tickEvents.push({ kind: "hit", from: target.uid, to: f.uid, dmg: reflect });
+            if (f.hp <= 0) {
+              f.alive = false;
+              tickEvents.push({ kind: "die", uid: f.uid });
+            }
+          }
+        }
         if (target.hp <= 0) {
           target.alive = false;
           tickEvents.push({ kind: "die", uid: target.uid });
@@ -192,16 +267,24 @@ export const Battle = {
 
     switch (abilityId) {
       case "rally": {
+        // perk_warcry: rally cooldown −2s
+        hero.cooldowns[abilityId] = ab.cd - (hero.perks.includes("perk_warcry") ? 2 : 0);
         for (const a of allies) a.atk = Math.round(a.atk * 1.30);
-        setTimeout(() => { for (const a of allies) a.atk = Math.round(a.atk / 1.30); }, 4000);
+        if (!bs.timers) bs.timers = [];
+        bs.timers.push({
+          deadline: bs.time + 4,
+          undo: () => { for (const a of allies) a.atk = Math.round(a.atk / 1.30); },
+        });
         break;
       }
       case "cleave": {
+        // perk_kindle: +10% ability damage (30 → 33)
+        const dmg = heroHasPerk(bs, side, "perk_kindle") ? 33 : 30;
         const targets = enemies.filter((e) => Math.abs(e.x - hero.x) < 12);
         for (const t of targets) {
-          t.hp -= 30;
+          t.hp -= dmg;
           if (t.hp <= 0) t.alive = false;
-          bs.floats.push({ id: Math.random().toString(36).slice(2), x: t.x, lane: t.lane, side: t.side, text: `-30`, t: 0 });
+          bs.floats.push({ id: Math.random().toString(36).slice(2), x: t.x, lane: t.lane, side: t.side, text: `-${dmg}`, t: 0 });
         }
         break;
       }
@@ -222,11 +305,13 @@ export const Battle = {
         break;
       }
       case "plague": {
+        // perk_kindle: +10% ability damage (30 → 33)
+        const dmg = heroHasPerk(bs, side, "perk_kindle") ? 33 : 30;
         for (const e of enemies) {
           if (Math.abs(e.x - hero.x) < 20 && e.lane === hero.lane) {
-            e.hp -= 30;
+            e.hp -= dmg;
             if (e.hp <= 0) e.alive = false;
-            bs.floats.push({ id: Math.random().toString(36).slice(2), x: e.x, lane: e.lane, side: e.side, text: `-30`, t: 0 });
+            bs.floats.push({ id: Math.random().toString(36).slice(2), x: e.x, lane: e.lane, side: e.side, text: `-${dmg}`, t: 0 });
           }
         }
         break;
@@ -243,7 +328,9 @@ export const Battle = {
         break;
       }
       case "mend": {
-        for (const a of allies) a.hp = Math.min(a.maxHp, a.hp + 25);
+        // perk_warden: +10% ability healing (25 → 28 rounded)
+        const heal = heroHasPerk(bs, side, "perk_warden") ? Math.round(25 * 1.1) : 25;
+        for (const a of allies) a.hp = Math.min(a.maxHp, a.hp + heal);
         break;
       }
     }

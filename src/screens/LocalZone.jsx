@@ -107,22 +107,34 @@ export function LocalZone() {
         </div>
 
         <div className="row gap-3" style={{ flexWrap: "wrap" }}>
-          {facilities.map((f) => (
-            <div
-              key={f.id}
-              className="panel slide-up"
-              style={{ flex: "1 1 240px", cursor: "pointer", minWidth: 240 }}
-              onClick={f.action}
-            >
-              <div className="row gap-3 center">
-                <div style={{ fontSize: 38 }}>{f.icon}</div>
-                <div className="col">
-                  <div className="h-display" style={{ fontSize: 14 }}>{f.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{f.desc}</div>
+          {facilities.map((f) => {
+            const onKey = (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                f.action();
+              }
+            };
+            return (
+              <div
+                key={f.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${f.name} — ${f.desc}`}
+                className="panel slide-up"
+                style={{ flex: "1 1 240px", cursor: "pointer", minWidth: 240 }}
+                onClick={f.action}
+                onKeyDown={onKey}
+              >
+                <div className="row gap-3 center">
+                  <div style={{ fontSize: 38 }}>{f.icon}</div>
+                  <div className="col">
+                    <div className="h-display" style={{ fontSize: 14 }}>{f.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{f.desc}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {tile.garrison && tile.garrison.length > 0 && (

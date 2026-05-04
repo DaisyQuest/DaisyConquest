@@ -10,14 +10,19 @@ import { TOWN_TYPES } from "../data/map.js";
 
 export function DefenseScreen() {
   const { state, dispatch } = useStore();
-  const tileId = state.screenParams.tileId;
   const training = state.screenParams.training;
+  // In real-mode, the tile under attack and the attacker faction live on
+  // state.pendingDefense (staged at END_ROUND). In training, fall back to
+  // the tile passed via screenParams and a hard-coded enemy faction.
+  const tileId = training
+    ? state.screenParams.tileId
+    : (state.pendingDefense?.tileId ?? state.screenParams.tileId);
   const tile = state.map.tiles.find((t) => t.id === tileId);
   const me = state.activePlayer;
   const myPlayer = state.players[me];
   const enemyFaction = training
     ? "ash"
-    : (tile?.attackerFaction || FACTION_LIST.find((f) => f !== me));
+    : (state.pendingDefense?.attackerFaction || FACTION_LIST.find((f) => f !== me));
 
   const dsRef = useRef(null);
   if (!dsRef.current) {
@@ -74,9 +79,16 @@ export function DefenseScreen() {
   const finish = () => {
     if (training) {
       dispatch({ type: "SET_SCREEN", screen: "zone", params: { tileId } });
-    } else {
-      dispatch({ type: "SET_SCREEN", screen: "map" });
+      return;
     }
+    // Real defense raid: resolve the outcome through the reducer so the
+    // tile flips on a loss, victory checks fire, and pendingDefense clears.
+    dispatch({
+      type: "RESOLVE_DEFENSE",
+      tileId,
+      won: !!ds.won,
+      attackerFaction: enemyFaction,
+    });
   };
 
   const pathD = "M " + Defense.PATH.map((p) => `${p.x} ${p.y}`).join(" L ");

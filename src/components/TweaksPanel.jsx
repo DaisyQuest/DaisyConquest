@@ -15,7 +15,7 @@ const THEMES = [
 
 const SCREENS = [
   "main", "map", "zone", "recruit", "upgrade", "shop",
-  "battle", "defense", "encounter", "summary", "coop",
+  "battle", "defense", "encounter", "summary", "coop", "victory",
 ];
 
 export function TweaksPanel() {

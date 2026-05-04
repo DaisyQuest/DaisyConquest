@@ -7,3 +7,4 @@ dist
 # Design bundle (kept locally as reference, not source)
 newconquestsemiautobattler/
 design.bin
+.playwright-mcp/

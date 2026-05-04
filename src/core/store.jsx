@@ -4,7 +4,7 @@
 
    {
      screen: "main"|"map"|"zone"|"recruit"|"upgrade"|"shop"|"battle"
-            |"defense"|"summary"|"encounter"|"coop",
+            |"defense"|"summary"|"encounter"|"coop"|"victory",
      screenParams: { ... },
      round: 1,
      map: { tiles, cols, rows, seed },
@@ -18,6 +18,7 @@
      activePlayer, humanFaction, coopFaction,
      log: [{ round, text }],
      pendingEncounter, pendingBattle, pendingDefense, pendingSummary,
+     pendingVictory: null | { winner: factionId|null, round, defeated? },
      theme, seed,
    } */
 
@@ -86,9 +87,56 @@ export function makeInitialState(opts = {}) {
     pendingBattle: null,
     pendingDefense: null,
     pendingSummary: null,
+    pendingVictory: null,
     theme: "parchment",
     seed,
   };
+}
+
+/* Mark factions with zero owned tiles as defeated. Returns a new players
+   map (referentially identical to input if nothing changed). bandit is
+   excluded since it isn't in FACTION_LIST. */
+function recomputeDefeated(players, tiles) {
+  let changed = false;
+  const next = { ...players };
+  for (const fid of FACTION_LIST) {
+    const owned = tiles.some((t) => t.owner === fid);
+    if (!owned && !next[fid].defeated) {
+      next[fid] = { ...next[fid], defeated: true };
+      changed = true;
+    }
+  }
+  return changed ? next : players;
+}
+
+/* If exactly one undefeated faction remains in FACTION_LIST, return a
+   pendingVictory descriptor. If the human faction(s) are all defeated and
+   there are still rivals left, return a defeat descriptor. Otherwise null. */
+function checkVictory(state, players) {
+  if (state.pendingVictory) return state.pendingVictory;
+  const undefeated = FACTION_LIST.filter((f) => !players[f].defeated);
+  if (undefeated.length === 1) {
+    return { winner: undefeated[0], round: state.round };
+  }
+  const humanFid = state.humanFaction;
+  const coopFid = state.coopFaction;
+  const humanLost = humanFid && players[humanFid]?.defeated;
+  const coopLost = !coopFid || players[coopFid]?.defeated;
+  if (humanLost && coopLost) {
+    return { winner: null, defeated: humanFid, round: state.round };
+  }
+  return null;
+}
+
+/* Compose defeat-check + victory-check after any tile-ownership change.
+   Returns a partial state delta: { players, pendingVictory?, screen? }. */
+function applyDefeatAndVictory(state, players, tiles) {
+  const nextPlayers = recomputeDefeated(players, tiles);
+  const pendingVictory = checkVictory(state, nextPlayers);
+  if (pendingVictory) {
+    return { players: nextPlayers, pendingVictory, screen: "victory" };
+  }
+  return { players: nextPlayers };
 }
 
 function applyLosses(stacks, losses) {
@@ -333,13 +381,16 @@ export function gameReducer(state, action) {
             : [];
         }
       }
+      const dv = applyDefeatAndVictory(state, players, tiles);
+      const nextScreen = dv.screen || "summary";
       return {
         ...state,
-        screen: "summary",
+        screen: nextScreen,
         pendingBattle: null,
         pendingSummary: { ...action.result, tileId: action.tileId, attacker: action.attacker, defender: action.defender },
+        pendingVictory: dv.pendingVictory ?? state.pendingVictory,
         map: { ...state.map, tiles },
-        players,
+        players: dv.players,
       };
     }
 
@@ -388,7 +439,94 @@ export function gameReducer(state, action) {
       for (const f of aiFactions) {
         map = AI.takeTurn({ ...state, map, players }, f);
       }
-      return { ...state, players, log, map, round: state.round + 1, screen: "map" };
+      const newRound = state.round + 1;
+      const stateAfterAI = { ...state, map, players, round: newRound };
+
+      // Defeat / victory check after AI expansions.
+      const dv = applyDefeatAndVictory(stateAfterAI, players, map.tiles);
+      if (dv.screen) {
+        return {
+          ...state,
+          players: dv.players,
+          log,
+          map,
+          round: newRound,
+          screen: "victory",
+          pendingVictory: dv.pendingVictory,
+        };
+      }
+
+      // Roll for an AI-vs-human defense raid; pick at most one.
+      const pendingDefense = AI.maybeAttackPlayer({ ...stateAfterAI, players: dv.players });
+      if (pendingDefense) {
+        const fac = FACTIONS[pendingDefense.attackerFaction];
+        log.push({
+          round: newRound,
+          text: `${fac.short} marches on your borders!`,
+        });
+        return {
+          ...state,
+          players: dv.players,
+          log,
+          map,
+          round: newRound,
+          screen: "defense",
+          screenParams: { tileId: pendingDefense.tileId },
+          pendingDefense,
+        };
+      }
+
+      return { ...state, players: dv.players, log, map, round: newRound, screen: "map" };
+    }
+
+    case "RESOLVE_DEFENSE": {
+      const tiles = state.map.tiles.map((t) => ({ ...t, garrison: [...(t.garrison || [])] }));
+      const tile = tiles.find((t) => t.id === action.tileId);
+      const log = [...state.log];
+      let players = state.players;
+      if (action.won) {
+        if (tile) {
+          log.push({
+            round: state.round,
+            text: `The walls of ${tile.id} held against the assault.`,
+          });
+        }
+      } else if (tile) {
+        const attackerFaction = action.attackerFaction;
+        const defenderFaction = tile.owner;
+        tile.owner = attackerFaction;
+        tile.garrison = [];
+        // Defenders wiped: the retinue is hero-bound, but the lore is they
+        // died defending — wipe the hero's retinue for the tile's prior owner.
+        const dPlayer = defenderFaction ? players[defenderFaction] : null;
+        if (dPlayer) {
+          players = {
+            ...players,
+            [defenderFaction]: {
+              ...dPlayer,
+              hero: { ...dPlayer.hero, retinue: [] },
+            },
+          };
+        }
+        const fac = FACTIONS[attackerFaction];
+        log.push({
+          round: state.round,
+          text: `${fac.short} overran the defenders and seized the region.`,
+        });
+      }
+
+      const dv = applyDefeatAndVictory(state, players, tiles);
+      const nextScreen = dv.screen || "map";
+      return {
+        ...state,
+        screen: nextScreen,
+        screenParams: {},
+        pendingDefense: null,
+        pendingVictory: dv.pendingVictory ?? state.pendingVictory,
+        players: dv.players,
+        map: { ...state.map, tiles },
+        log,
+      };
     }
 
     case "SET_THEME":

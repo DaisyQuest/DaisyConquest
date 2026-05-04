@@ -14,13 +14,33 @@ export function HexTile({ tile, selected, hovered, isAdjacentToActive, onClick, 
   const ownerOverlay = fac ? fac.palette.primary : null;
   const gradId = `tg_${tile.id}`;
 
+  const activate = () => !terr.impassable && onClick && onClick(tile);
+  const onKey = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      activate();
+    }
+  };
+  const ariaLabel = [
+    town?.name || terr.name,
+    fac ? fac.short : tile.owner ? "" : "unclaimed",
+    garrisonCount ? `garrison ${garrisonCount}` : "",
+  ].filter(Boolean).join(", ");
+
   return (
     <div
       className={`hex hex-big ${selected ? "selected" : ""} ${terr.impassable ? "disabled" : ""}`}
       style={{ left: tile.x, top: tile.y }}
-      onClick={() => !terr.impassable && onClick && onClick(tile)}
+      role={terr.impassable ? undefined : "button"}
+      tabIndex={terr.impassable ? -1 : 0}
+      aria-label={ariaLabel}
+      aria-pressed={selected ? true : undefined}
+      onClick={activate}
+      onKeyDown={onKey}
       onMouseEnter={() => onHover && onHover(tile)}
       onMouseLeave={() => onHover && onHover(null)}
+      onFocus={() => onHover && onHover(tile)}
+      onBlur={() => onHover && onHover(null)}
     >
       <svg viewBox="0 0 120 138" width="120" height="138">
         <defs>

@@ -33,10 +33,21 @@ export function MainMenu() {
             {FACTION_LIST.map((fid) => {
               const fac = FACTIONS[fid];
               const isMe = chosen === fid;
+              const onKey = (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setChosen(fid);
+                }
+              };
               return (
                 <div
                   key={fid}
+                  role="radio"
+                  tabIndex={0}
+                  aria-checked={isMe}
+                  aria-label={`Choose ${fac.name}`}
                   onClick={() => setChosen(fid)}
+                  onKeyDown={onKey}
                   style={{
                     cursor: "pointer", padding: 14,
                     border: isMe ? "3px solid var(--gold)" : "2px solid var(--line)",

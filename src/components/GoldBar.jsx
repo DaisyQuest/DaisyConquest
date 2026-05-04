@@ -4,11 +4,15 @@ import { Economy } from "../core/economy.js";
 import { FACTIONS } from "../data/factions.js";
 import { Crest } from "./Crest.jsx";
 
+// Recruit and Shop are tile-scoped — they need a tileId in screenParams.
+// We only enable them when the player is currently on a screen that already
+// has a tile context (zone / recruit / upgrade / shop) so clicking them
+// can't drop you on a "Region not found" page.
 const NAV = [
-  { id: "map",     label: "Map",     icon: "🗺️" },
-  { id: "recruit", label: "Recruit", icon: "⚔️" },
-  { id: "upgrade", label: "Hero",    icon: "👑" },
-  { id: "shop",    label: "Shop",    icon: "🏪" },
+  { id: "map",     label: "Map",     icon: "🗺️", needsTile: false },
+  { id: "recruit", label: "Recruit", icon: "⚔️", needsTile: true },
+  { id: "upgrade", label: "Hero",    icon: "👑", needsTile: false },
+  { id: "shop",    label: "Shop",    icon: "🏪", needsTile: true },
 ];
 
 export function GoldBar() {
@@ -34,16 +38,28 @@ export function GoldBar() {
       <div style={{ flex: 1 }} />
 
       <div className="row gap-2">
-        {NAV.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => dispatch({ type: "SET_SCREEN", screen: s.id })}
-            className={`btn ${state.screen === s.id ? "btn-primary" : "btn-ghost"}`}
-            style={{ padding: "6px 12px" }}
-          >
-            <span style={{ fontSize: 14 }}>{s.icon}</span> {s.label}
-          </button>
-        ))}
+        {NAV.map((s) => {
+          const tileId = state.screenParams?.tileId;
+          const disabled = s.needsTile && !tileId;
+          return (
+            <button
+              key={s.id}
+              onClick={() =>
+                dispatch({
+                  type: "SET_SCREEN",
+                  screen: s.id,
+                  params: tileId ? { tileId } : {},
+                })
+              }
+              disabled={disabled}
+              title={disabled ? "Enter a town first" : undefined}
+              className={`btn ${state.screen === s.id ? "btn-primary" : "btn-ghost"}`}
+              style={{ padding: "6px 12px" }}
+            >
+              <span style={{ fontSize: 14 }}>{s.icon}</span> {s.label}
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ flex: 1 }} />

@@ -32,9 +32,20 @@ export function EncounterScreen() {
   };
 
   const apply = () => {
+    const heroPerks = state.players[state.activePlayer]?.hero?.perks || [];
+    let delta = resolved;
+    if (heroPerks.includes("perk_envoy") && delta) {
+      delta = { ...delta };
+      if (typeof delta.gold === "number" && delta.gold > 0) {
+        delta.gold = Math.round(delta.gold * 1.5);
+      }
+      if (typeof delta.heroXp === "number" && delta.heroXp > 0) {
+        delta.heroXp = Math.round(delta.heroXp * 1.5);
+      }
+    }
     dispatch({
       type: "RESOLVE_ENCOUNTER",
-      delta: resolved,
+      delta,
       optional: !!params.optional,
       tileId: params.tileId,
     });

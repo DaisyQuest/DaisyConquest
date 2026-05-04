@@ -14,6 +14,7 @@ import { DefenseScreen } from "./screens/Defense.jsx";
 import { EncounterScreen } from "./screens/Encounter.jsx";
 import { RoundSummaryScreen } from "./screens/RoundSummary.jsx";
 import { CoopLobby } from "./screens/CoopLobby.jsx";
+import { VictoryScreen } from "./screens/Victory.jsx";
 
 const SCREENS = {
   main:      MainMenu,
@@ -27,10 +28,11 @@ const SCREENS = {
   encounter: EncounterScreen,
   summary:   RoundSummaryScreen,
   coop:      CoopLobby,
+  victory:   VictoryScreen,
 };
 
 const SCREENS_WITHOUT_TOPBAR = new Set([
-  "main", "battle", "defense", "encounter", "summary", "coop",
+  "main", "battle", "defense", "encounter", "summary", "coop", "victory",
 ]);
 
 export function App() {
