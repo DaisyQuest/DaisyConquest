@@ -75,10 +75,7 @@ export function WorldMap() {
   const mapW = state.map.cols * 105 + 80;
   const mapH = state.map.rows * 110 + 80;
 
-  const swapControl = () => {
-    const next = state.activePlayer === state.humanFaction ? state.coopFaction : state.humanFaction;
-    dispatch({ type: "SET_ACTIVE_PLAYER", faction: next });
-  };
+  const swapControl = () => dispatch({ type: "SWAP_CONTROL", next: "map" });
 
   return (
     <div className="parchment" style={{ width: "100%", height: "100%", display: "flex", overflow: "hidden" }}>

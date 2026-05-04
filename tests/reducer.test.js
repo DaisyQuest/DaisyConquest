@@ -29,6 +29,38 @@ describe("SET_ACTIVE_PLAYER", () => {
   });
 });
 
+describe("SWAP_CONTROL (co-op handoff)", () => {
+  it("flips active between human and coop ally and routes through handoff", () => {
+    const coop = makeInitialState({ seed: 2, human: "crown", coopWith: "thorn" });
+    expect(coop.activePlayer).toBe("crown");
+    const after = gameReducer(coop, { type: "SWAP_CONTROL", next: "map" });
+    expect(after.activePlayer).toBe("thorn");
+    expect(after.screen).toBe("handoff");
+    expect(after.screenParams).toEqual({ next: "map" });
+    const back = gameReducer(after, { type: "SWAP_CONTROL", next: "map" });
+    expect(back.activePlayer).toBe("crown");
+  });
+  it("is a no-op when no co-op partner exists", () => {
+    const after = gameReducer(state, { type: "SWAP_CONTROL", next: "map" });
+    expect(after).toBe(state);
+  });
+});
+
+describe("MOVE_HERO_TO co-op ally guard", () => {
+  it("does not stage a battle against a co-op ally tile", () => {
+    let s = makeInitialState({ seed: 3, human: "crown", coopWith: "thorn" });
+    // Plant a thorn-owned tile with a garrison adjacent to crown's territory.
+    const tiles = s.map.tiles.map((t) => ({ ...t }));
+    const target = tiles.find((t) => t.terrain !== "sea" && !t.owner);
+    target.owner = "thorn";
+    target.garrison = [{ unit: "forager", count: 3 }];
+    s = { ...s, map: { ...s.map, tiles } };
+    const after = gameReducer(s, { type: "MOVE_HERO_TO", tileId: target.id });
+    expect(after).toBe(s); // unchanged — no battle staged
+    expect(after.screen).not.toBe("battle");
+  });
+});
+
 describe("SELECT_TILE", () => {
   it("updates only the active player's selectedTile", () => {
     const tideBefore = state.players.tide.selectedTile;

@@ -18,16 +18,20 @@ export function DefenseScreen() {
     ? state.screenParams.tileId
     : (state.pendingDefense?.tileId ?? state.screenParams.tileId);
   const tile = state.map.tiles.find((t) => t.id === tileId);
-  const me = state.activePlayer;
-  const myPlayer = state.players[me];
+  // The defender is the tile owner, NOT activePlayer — in co-op the AI may
+  // raid the partner's tile while the other partner happens to be active.
+  const defenderFaction = training
+    ? state.activePlayer
+    : (tile?.owner || state.activePlayer);
+  const defenderPlayer = state.players[defenderFaction] || state.players[state.activePlayer];
   const enemyFaction = training
     ? "ash"
-    : (state.pendingDefense?.attackerFaction || FACTION_LIST.find((f) => f !== me));
+    : (state.pendingDefense?.attackerFaction || FACTION_LIST.find((f) => f !== defenderFaction));
 
   const dsRef = useRef(null);
   if (!dsRef.current) {
     dsRef.current = Defense.init({
-      defenderRetinue: myPlayer.hero.retinue.map((s) => ({ ...s })),
+      defenderRetinue: defenderPlayer.hero.retinue.map((s) => ({ ...s })),
       attackerFaction: enemyFaction,
     });
   }
@@ -133,7 +137,7 @@ export function DefenseScreen() {
                 left: `${slotX}%`, top: "50%",
                 transform: "translate(-50%, -50%)",
                 width: 44, height: 44,
-                background: placed ? FACTIONS[me].palette.primary : "rgba(255,255,255,0.2)",
+                background: placed ? FACTIONS[defenderFaction].palette.primary : "rgba(255,255,255,0.2)",
                 border: `2px dashed ${placed ? "var(--line)" : "rgba(42,29,18,0.5)"}`,
                 borderRadius: 8,
                 cursor: selected && !placed ? "pointer" : "default",

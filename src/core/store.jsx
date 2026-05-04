@@ -196,6 +196,23 @@ export function gameReducer(state, action) {
     case "SET_ACTIVE_PLAYER":
       return { ...state, activePlayer: action.faction };
 
+    case "SWAP_CONTROL": {
+      // Co-op hand-off: flip activePlayer between humanFaction and coopFaction
+      // and route through the Handoff screen. `next` is where the new active
+      // player will land (defaults to map).
+      if (!state.coopFaction) return state;
+      const next =
+        state.activePlayer === state.humanFaction
+          ? state.coopFaction
+          : state.humanFaction;
+      return {
+        ...state,
+        activePlayer: next,
+        screen: "handoff",
+        screenParams: { next: action.next || "map" },
+      };
+    }
+
     case "SELECT_TILE": {
       const players = { ...state.players };
       players[state.activePlayer] = { ...players[state.activePlayer], selectedTile: action.tileId };
@@ -209,6 +226,13 @@ export function gameReducer(state, action) {
       const target = tiles.find((t) => t.id === action.tileId);
       if (!target) return state;
       const me = state.activePlayer;
+
+      // Co-op guard: never attack a fellow human (ally) tile. Treat as no-op
+      // so the player can still "select" without wrecking shared state.
+      const allies = [state.humanFaction, state.coopFaction].filter(Boolean);
+      if (target.owner && allies.includes(target.owner) && target.owner !== me) {
+        return state;
+      }
 
       // 1. Enemy with a garrison → battle
       if (target.owner && target.owner !== me && (target.garrison?.length || 0) > 0) {
@@ -471,9 +495,14 @@ export function gameReducer(state, action) {
       const pendingDefense = AI.maybeAttackPlayer({ ...stateAfterAI, players: dv.players });
       if (pendingDefense) {
         const fac = FACTIONS[pendingDefense.attackerFaction];
+        // Find the defending human (tile owner). In co-op the active player
+        // and the defender may differ — auto-switch so the right partner
+        // plays the minigame and their retinue loads.
+        const defenderTile = map.tiles.find((t) => t.id === pendingDefense.tileId);
+        const defenderFaction = defenderTile?.owner || state.activePlayer;
         log.push({
           round: newRound,
-          text: `${fac.short} marches on your borders!`,
+          text: `${fac.short} marches on ${FACTIONS[defenderFaction]?.short || "your"} borders!`,
         });
         return {
           ...state,
@@ -481,6 +510,7 @@ export function gameReducer(state, action) {
           log,
           map,
           round: newRound,
+          activePlayer: defenderFaction,
           screen: "defense",
           screenParams: { tileId: pendingDefense.tileId },
           pendingDefense,
@@ -493,13 +523,16 @@ export function gameReducer(state, action) {
     case "RESOLVE_DEFENSE": {
       const tiles = state.map.tiles.map((t) => ({ ...t, garrison: [...(t.garrison || [])] }));
       const tile = tiles.find((t) => t.id === action.tileId);
+      const regionName = tile
+        ? (TOWN_TYPES[tile.town]?.name || TERRAINS[tile.terrain]?.name || "the region")
+        : "the region";
       const log = [...state.log];
       let players = state.players;
       if (action.won) {
         if (tile) {
           log.push({
             round: state.round,
-            text: `The walls of ${tile.id} held against the assault.`,
+            text: `The walls of ${regionName} held against the assault.`,
           });
         }
       } else if (tile) {

@@ -1,4 +1,7 @@
-/* GoldBar — top strip: round, gold, income/upkeep, navigation, end-round. */
+/* GoldBar — top strip: round, gold, income/upkeep, navigation, end-round.
+   In co-op the bar is tinted by the active player's faction palette and
+   surfaces a Swap Control button so handoff is reachable from any screen
+   that has the topbar. */
 import { useStore } from "../core/store.jsx";
 import { Economy } from "../core/economy.js";
 import { FACTIONS } from "../data/factions.js";
@@ -21,17 +24,28 @@ export function GoldBar() {
   const income = Economy.computeIncome(state, state.activePlayer);
   const upkeep = Economy.computeUpkeep(state, state.activePlayer);
   const fac = FACTIONS[state.activePlayer];
+  const inCoop = !!state.coopFaction;
+  // Active-player accent: thin top stripe + crest border in faction color.
+  // Subtle enough not to clash with the parchment palette, strong enough
+  // that you can tell at a glance whose turn it is.
+  const accent = fac?.palette?.primary || "var(--gold)";
 
   return (
-    <div className="topbar">
+    <div
+      className="topbar"
+      style={{ boxShadow: `inset 0 4px 0 ${accent}, var(--shadow-1)` }}
+    >
       <div className="row gap-2 center">
         <Crest faction={state.activePlayer} size={36} />
         <div className="col" style={{ lineHeight: 1 }}>
           <span className="crown">Iron Crowns</span>
           <span style={{
-            fontSize: 10, color: "var(--ink-soft)",
+            fontSize: 10, color: accent,
             letterSpacing: "0.08em", textTransform: "uppercase",
-          }}>{fac.short}</span>
+            fontWeight: 700,
+          }}>
+            {inCoop ? `${fac.short}'s turn` : fac.short}
+          </span>
         </div>
       </div>
 
@@ -78,6 +92,15 @@ export function GoldBar() {
           <span>+{income}/r</span>
           <span style={{ color: "var(--blood)" }}>−{upkeep}/r</span>
         </div>
+        {inCoop && (
+          <button
+            className="btn btn-ghost"
+            onClick={() => dispatch({ type: "SWAP_CONTROL", next: "map" })}
+            title="Hand off control to your co-op partner"
+          >
+            ↔ Swap
+          </button>
+        )}
         <button className="btn btn-primary" onClick={() => dispatch({ type: "END_ROUND" })}>
           End Round ▶
         </button>
