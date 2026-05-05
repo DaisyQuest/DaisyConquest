@@ -4,6 +4,8 @@ import { useStore } from "../core/store.jsx";
 import { Economy } from "../core/economy.js";
 import { unitsByFaction } from "../data/units.js";
 import { UnitCard } from "../components/UnitCard.jsx";
+import { FACTIONS } from "../data/factions.js";
+import { TERRAINS, TOWN_TYPES } from "../data/map.js";
 
 export function Recruit() {
   const { state, dispatch } = useStore();
@@ -16,6 +18,19 @@ export function Recruit() {
   const [counts, setCounts] = useState({});
 
   if (!tile) return <div style={{ padding: 40 }}>Region not found.</div>;
+
+  // Tile-ownership guard for co-op: this town's mustering field belongs to
+  // its owner. The active player can't recruit at a partner's (or rival's)
+  // town — those would be incoherent unit-roster mixes.
+  if (tile.owner && tile.owner !== me) {
+    return (
+      <NotYourTownPanel
+        tile={tile}
+        message="This town does not answer to you. Swap control or back out to the map."
+        dispatch={dispatch}
+      />
+    );
+  }
 
   const units = unitsByFaction(me);
   const totalCost = units.reduce(
@@ -125,6 +140,48 @@ export function Recruit() {
               Confirm Recruitment
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Shared "you don't own this town" panel — used by Recruit and Shop in coop
+   to refuse mixing one player's faction roster into another's town. */
+export function NotYourTownPanel({ tile, message, dispatch }) {
+  const fac = tile.owner ? FACTIONS[tile.owner] : null;
+  const town = tile.town ? TOWN_TYPES[tile.town] : null;
+  const terr = TERRAINS[tile.terrain];
+  return (
+    <div className="parchment full" style={{
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
+    }}>
+      <div className="panel pop-in" style={{ maxWidth: 480, textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 8 }}>{town?.icon || terr.icon}</div>
+        <div className="h-display" style={{ fontSize: 22, marginBottom: 6 }}>
+          {town?.name || terr.name}
+        </div>
+        {fac && (
+          <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 12 }}>
+            Held by <span style={{ color: fac.palette.primary, fontWeight: 700 }}>{fac.name}</span>
+          </div>
+        )}
+        <div style={{ fontSize: 13, color: "var(--ink)", marginBottom: 18, lineHeight: 1.5 }}>
+          {message}
+        </div>
+        <div className="row gap-2 center" style={{ justifyContent: "center" }}>
+          <button
+            className="btn"
+            onClick={() => dispatch({ type: "SET_SCREEN", screen: "map" })}
+          >
+            ← World Map
+          </button>
+          <button
+            className="btn btn-ghost"
+            onClick={() => dispatch({ type: "SWAP_CONTROL", next: "map" })}
+          >
+            ↔ Swap Control
+          </button>
         </div>
       </div>
     </div>

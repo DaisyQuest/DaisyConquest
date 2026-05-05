@@ -93,18 +93,73 @@ export function GoldBar() {
           <span style={{ color: "var(--blood)" }}>−{upkeep}/r</span>
         </div>
         {inCoop && (
-          <button
-            className="btn btn-ghost"
-            onClick={() => dispatch({ type: "SWAP_CONTROL", next: "map" })}
-            title="Hand off control to your co-op partner"
-          >
-            ↔ Swap
-          </button>
+          <>
+            <PartnerStatus state={state} />
+            <button
+              className="btn btn-ghost"
+              onClick={() => dispatch({ type: "SWAP_CONTROL", next: "map" })}
+              title="Hand off control to your co-op partner"
+            >
+              ↔ Swap
+            </button>
+          </>
         )}
-        <button className="btn btn-primary" onClick={() => dispatch({ type: "END_ROUND" })}>
-          End Round ▶
+        <button
+          className="btn btn-primary"
+          onClick={() => dispatch({ type: "END_TURN" })}
+          title={
+            inCoop
+              ? "Pass turn to your partner — round advances after both end."
+              : "Advance to the next round"
+          }
+        >
+          {endTurnLabel(state)} ▶
         </button>
       </div>
+    </div>
+  );
+}
+
+/* In single-player or after the partner has ended, this button advances
+   the world. Otherwise it hands off — and the label reflects that. */
+function endTurnLabel(state) {
+  if (!state.coopFaction) return "End Round";
+  const partnerId =
+    state.activePlayer === state.humanFaction
+      ? state.coopFaction
+      : state.humanFaction;
+  const partnerEnded = !!state.players[partnerId]?.endedTurn;
+  return partnerEnded ? "End Round" : "End My Turn";
+}
+
+function PartnerStatus({ state }) {
+  const partnerId =
+    state.activePlayer === state.humanFaction
+      ? state.coopFaction
+      : state.humanFaction;
+  const partner = state.players[partnerId];
+  if (!partner) return null;
+  const ended = !!partner.endedTurn;
+  const partnerFac = FACTIONS[partnerId];
+  return (
+    <div
+      className="row gap-1 center"
+      style={{
+        fontSize: 10,
+        color: "var(--ink-soft)",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+      }}
+      title={
+        ended
+          ? `${partnerFac?.short} has ended their turn — End Round will advance the world.`
+          : `${partnerFac?.short} is still playing.`
+      }
+    >
+      <span style={{ fontSize: 12 }}>{partnerFac?.crest}</span>
+      <span style={{ color: ended ? "var(--green-dk)" : "var(--ink-faint)" }}>
+        {ended ? "✓ ready" : "playing…"}
+      </span>
     </div>
   );
 }

@@ -4,14 +4,17 @@ import { useMemo } from "react";
 import { useStore } from "../core/store.jsx";
 import { makeRNG } from "../core/rng.js";
 import { ITEMS } from "../data/items.js";
+import { NotYourTownPanel } from "./Recruit.jsx";
 
 export function Shop() {
   const { state, dispatch } = useStore();
   const me = state.activePlayer;
   const myPlayer = state.players[me];
   const tileId = state.screenParams.tileId;
+  const tile = tileId ? state.map.tiles.find((t) => t.id === tileId) : null;
 
-  // Daily rotation: 6 items, seeded by round + tile
+  // Daily rotation: 6 items, seeded by round + tile. Hooks must run before
+  // any early-return so the order is stable.
   const items = useMemo(() => {
     const tileSeed = tileId ? tileId.split(",").map(Number).reduce((a, b) => a * 31 + b, 0) : 0;
     const rng = makeRNG(state.round * 1000 + tileSeed);
@@ -34,6 +37,18 @@ export function Shop() {
       screen: tileId ? "zone" : "map",
       params: tileId ? { tileId } : {},
     });
+
+  // Tile-ownership guard for co-op: only browse the market in your own town.
+  // (Tile-less shop access via topbar nav is already disabled there.)
+  if (tile && tile.owner && tile.owner !== me) {
+    return (
+      <NotYourTownPanel
+        tile={tile}
+        message="The merchants here trade only with their own lord. Swap control or back out to the map."
+        dispatch={dispatch}
+      />
+    );
+  }
 
   return (
     <div className="parchment full" style={{ overflow: "auto", padding: 24 }}>

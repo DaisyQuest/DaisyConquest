@@ -54,6 +54,9 @@ export function makeInitialState(opts = {}) {
       gold: fid === human ? CONST.STARTING_GOLD : 150,
       isHuman: fid === human || fid === coopWith,
       defeated: false,
+      // In coop, each human player tracks whether they've ended their turn
+      // this round. Reset to false at every END_ROUND. Single-player ignores.
+      endedTurn: false,
       hero: {
         id: fac.heroStarter,
         name: heroDef.name,
@@ -210,6 +213,37 @@ export function gameReducer(state, action) {
         activePlayer: next,
         screen: "handoff",
         screenParams: { next: action.next || "map" },
+      };
+    }
+
+    case "END_TURN": {
+      // The single end-of-something action UI dispatches. Three branches:
+      //   1. single-player → identical to END_ROUND.
+      //   2. coop, partner has not yet ended → mark active.endedTurn,
+      //      hand off to partner via the Handoff screen.
+      //   3. coop, partner already ended → run END_ROUND (which resets the
+      //      flags as part of round advance).
+      const coop = state.coopFaction;
+      if (!coop) return gameReducer(state, { type: "END_ROUND" });
+
+      const me = state.activePlayer;
+      const partner = me === state.humanFaction ? coop : state.humanFaction;
+      const partnerEnded = !!state.players[partner]?.endedTurn;
+
+      if (partnerEnded) {
+        return gameReducer(state, { type: "END_ROUND" });
+      }
+
+      const players = {
+        ...state.players,
+        [me]: { ...state.players[me], endedTurn: true },
+      };
+      return {
+        ...state,
+        players,
+        activePlayer: partner,
+        screen: "handoff",
+        screenParams: { next: "map" },
       };
     }
 
@@ -462,11 +496,17 @@ export function gameReducer(state, action) {
       const players = { ...state.players };
       const log = [...state.log];
       for (const fid of FACTION_LIST) {
-        if (players[fid].defeated) continue;
+        // Always reset endedTurn — even defeated factions, in case a future
+        // mechanic resurrects them; the flag should never carry across rounds.
+        const base = { ...players[fid], endedTurn: false };
+        if (base.defeated) {
+          players[fid] = base;
+          continue;
+        }
         const inc = Economy.computeIncome(state, fid);
         const upk = Economy.computeUpkeep(state, fid);
-        const next = players[fid].gold + inc - upk;
-        players[fid] = { ...players[fid], gold: Math.max(0, next) };
+        const next = base.gold + inc - upk;
+        players[fid] = { ...base, gold: Math.max(0, next) };
       }
       log.push({ round: state.round + 1, text: `Round ${state.round + 1} begins.` });
       let map = state.map;
@@ -504,6 +544,12 @@ export function gameReducer(state, action) {
           round: newRound,
           text: `${fac.short} marches on ${FACTIONS[defenderFaction]?.short || "your"} borders!`,
         });
+        // In coop, route through Handoff first so the partner physically
+        // holding the device knows control is being passed before the
+        // minigame starts. The Handoff screen reads screenParams.next.
+        const isCoop = !!state.coopFaction;
+        const switchingPlayer =
+          isCoop && state.activePlayer !== defenderFaction;
         return {
           ...state,
           players: dv.players,
@@ -511,8 +557,10 @@ export function gameReducer(state, action) {
           map,
           round: newRound,
           activePlayer: defenderFaction,
-          screen: "defense",
-          screenParams: { tileId: pendingDefense.tileId },
+          screen: switchingPlayer ? "handoff" : "defense",
+          screenParams: switchingPlayer
+            ? { next: "defense", tileId: pendingDefense.tileId }
+            : { tileId: pendingDefense.tileId },
           pendingDefense,
         };
       }
