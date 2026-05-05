@@ -1,14 +1,17 @@
 /* UnitCard — three variants:
    - "compact" (default): inline pill with portrait + name + count
    - "full": bordered panel with stats and traits
-   - "battle": just a portrait swatch sized for the battle screen */
+   - "battle": just a portrait swatch sized for the battle screen
+   Optional `level` prop renders a small chip when > 1, used by retinue
+   displays to show veteran stacks. */
 import { UNITS } from "../data/units.js";
 import { FACTIONS } from "../data/factions.js";
 
-export function UnitCard({ unitId, count, variant = "compact", onClick, selected, dim }) {
+export function UnitCard({ unitId, count, level, variant = "compact", onClick, selected, dim }) {
   const u = UNITS[unitId];
   if (!u) return null;
   const fac = FACTIONS[u.faction];
+  const showLevel = typeof level === "number" && level > 1;
 
   if (variant === "battle") {
     return (
@@ -75,7 +78,11 @@ export function UnitCard({ unitId, count, variant = "compact", onClick, selected
       }}>{u.icon}</div>
       <div className="col" style={{ lineHeight: 1.1 }}>
         <span className="h-ui" style={{ fontSize: 11 }}>{u.name}</span>
-        {count != null && <span style={{ fontSize: 10, color: "var(--ink-soft)" }}>×{count}</span>}
+        <span style={{ fontSize: 10, color: "var(--ink-soft)" }}>
+          {count != null && <>×{count}</>}
+          {count != null && showLevel && " · "}
+          {showLevel && <span style={{ color: "var(--gold-dk)", fontWeight: 700 }}>L{level}</span>}
+        </span>
       </div>
     </div>
   );

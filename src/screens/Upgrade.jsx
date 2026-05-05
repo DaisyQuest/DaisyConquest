@@ -5,6 +5,13 @@ import { useStore } from "../core/store.jsx";
 import { HEROES } from "../data/heroes.js";
 import { itemsBySlot } from "../data/items.js";
 import { perksByBranch } from "../data/perks.js";
+import {
+  UNITS,
+  PROMOTIONS,
+  STACK_LEVEL_CAP,
+  xpForStackLevel,
+  promotionCost,
+} from "../data/units.js";
 import { HeroPanel } from "../components/HeroPanel.jsx";
 import { UnitCard } from "../components/UnitCard.jsx";
 
@@ -37,17 +44,19 @@ export function Upgrade() {
             <HeroPanel player={myPlayer} />
             <div className="panel" style={{ marginTop: 12 }}>
               <div className="panel-title">Retinue</div>
-              <div className="col gap-1">
+              <div className="col gap-2">
                 {h.retinue.length === 0 && (
                   <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>Empty. Hire troops at a town.</div>
                 )}
                 {h.retinue.map((s, i) => (
-                  <div key={i} className="row between center" style={{
-                    padding: "4px 6px", background: "var(--bg-1)",
-                    borderRadius: 6, border: "1px solid var(--line)",
-                  }}>
-                    <UnitCard unitId={s.unit} count={s.count} />
-                  </div>
+                  <RetinueRow
+                    key={`${s.unit}-${i}`}
+                    stack={s}
+                    stackIndex={i}
+                    playerGold={myPlayer.gold}
+                    faction={me}
+                    dispatch={dispatch}
+                  />
                 ))}
               </div>
             </div>
@@ -225,3 +234,91 @@ function ConsumablesTab({ hero, player, dispatch, faction }) {
   );
 }
 
+/* Retinue row: archetype line, level chip, XP bar to next level (or
+   "READY TO PROMOTE" when capped), and an inline branch chooser when the
+   stack can promote. We keep this in the side panel — no new screen. */
+function RetinueRow({ stack, stackIndex, playerGold, faction, dispatch }) {
+  const u = UNITS[stack.unit];
+  const lvl = stack.lvl ?? 1;
+  const xp = stack.xp ?? 0;
+  const atCap = lvl >= STACK_LEVEL_CAP;
+  const branches = PROMOTIONS[stack.unit] || [];
+  const canPromote = atCap && branches.length > 0;
+  const cost = promotionCost(stack.count);
+  const [open, setOpen] = useState(false);
+
+  const xpToNext = atCap ? 1 : xpForStackLevel(lvl + 1);
+  const xpProg = atCap ? 1 : Math.min(1, xp / xpToNext);
+
+  return (
+    <div style={{
+      padding: "6px 8px", background: "var(--bg-1)",
+      borderRadius: 6, border: "1px solid var(--line)",
+    }}>
+      <div className="row between center">
+        <UnitCard unitId={stack.unit} count={stack.count} level={lvl} />
+        {canPromote && !open && (
+          <button
+            className="btn btn-primary"
+            style={{ padding: "3px 10px", fontSize: 11 }}
+            onClick={() => setOpen(true)}
+          >
+            Promote…
+          </button>
+        )}
+      </div>
+
+      <div className="col gap-1" style={{ marginTop: 6 }}>
+        <div className="row between" style={{ fontSize: 10, color: "var(--ink-soft)" }}>
+          <span>{u?.name || stack.unit} · L{lvl}{atCap ? " (max)" : ""}</span>
+          <span className="numeric">
+            {atCap ? "READY" : `${xp}/${xpToNext} XP`}
+          </span>
+        </div>
+        <div className="bar bar-xp" style={{ height: 5 }}>
+          <div style={{ width: `${xpProg * 100}%` }} />
+        </div>
+      </div>
+
+      {open && canPromote && (
+        <div className="col gap-1" style={{ marginTop: 8, padding: 8, background: "var(--bg-2)", borderRadius: 6, border: "1px solid var(--line)" }}>
+          <div style={{ fontSize: 10, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            Promote to · cost {cost}g
+          </div>
+          <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+            {branches.map((toUnit) => {
+              const target = UNITS[toUnit];
+              const affordable = playerGold >= cost;
+              return (
+                <button
+                  key={toUnit}
+                  className="btn"
+                  disabled={!affordable}
+                  style={{ padding: "6px 10px", fontSize: 11 }}
+                  onClick={() => {
+                    dispatch({ type: "PROMOTE_STACK", faction, stackIndex, toUnit });
+                    setOpen(false);
+                  }}
+                >
+                  {target?.icon} {target?.name}
+                </button>
+              );
+            })}
+            <button
+              className="btn btn-ghost"
+              style={{ padding: "6px 10px", fontSize: 11 }}
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </button>
+          </div>
+          {playerGold < cost && (
+            <div style={{ fontSize: 10, color: "var(--blood-dk)" }}>
+              Need {cost - playerGold} more gold.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

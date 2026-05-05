@@ -31,7 +31,27 @@ import { HEROES, heroXpForLevel } from "../data/heroes.js";
 import { ITEMS } from "../data/items.js";
 import { ENCOUNTERS } from "../data/encounters.js";
 import { generateMap, revealAround, TERRAINS, TOWN_TYPES } from "../data/map.js";
+import {
+  PROMOTIONS,
+  STACK_LEVEL_CAP,
+  xpForStackLevel,
+  promotionCost,
+} from "../data/units.js";
 import { AI } from "../systems/ai.js";
+
+/* Apply XP to a single retinue stack; level up while overflowing the
+   curve. Caps at STACK_LEVEL_CAP — surplus XP on a capped stack is lost.
+   Defensive on legacy stacks: lvl ?? 1, xp ?? 0. */
+function awardStackXp(stack, xpDelta) {
+  let lvl = stack.lvl ?? 1;
+  let xp = (stack.xp ?? 0) + Math.max(0, xpDelta | 0);
+  while (lvl < STACK_LEVEL_CAP && xp >= xpForStackLevel(lvl + 1)) {
+    xp -= xpForStackLevel(lvl + 1);
+    lvl += 1;
+  }
+  if (lvl >= STACK_LEVEL_CAP) xp = 0; // capped — discard surplus
+  return { ...stack, lvl, xp };
+}
 
 const StoreCtx = createContext(null);
 
@@ -70,8 +90,8 @@ export function makeInitialState(opts = {}) {
         consumables: ["potionHeal", "potionHeal"],
         perks: [],
         retinue: [
-          { unit: fac.units[0], count: 4 },
-          { unit: fac.units[1], count: 1 },
+          { unit: fac.units[0], count: 4, lvl: 1, xp: 0 },
+          { unit: fac.units[1], count: 1, lvl: 1, xp: 0 },
         ],
         mounted: false,
       },
@@ -348,6 +368,11 @@ export function gameReducer(state, action) {
     }
 
     case "RECRUIT": {
+      // Merge invariant: when recruiting more of an archetype that's
+      // already in the retinue, count goes up but lvl/xp on the existing
+      // stack are preserved. New recruits inherit the veteran level — this
+      // keeps the player's mental model "one stack per archetype" and
+      // means PROMOTE_STACK / loss-application don't have to disambiguate.
       const players = { ...state.players };
       const p = { ...players[action.faction] };
       const cost = Economy.troopCost(action.unit, action.count, p.hero);
@@ -356,8 +381,11 @@ export function gameReducer(state, action) {
       if (action.toRetinue) {
         const r = [...p.hero.retinue];
         const idx = r.findIndex((s) => s.unit === action.unit);
-        if (idx >= 0) r[idx] = { ...r[idx], count: r[idx].count + action.count };
-        else r.push({ unit: action.unit, count: action.count });
+        if (idx >= 0) {
+          r[idx] = { ...r[idx], count: r[idx].count + action.count };
+        } else {
+          r.push({ unit: action.unit, count: action.count, lvl: 1, xp: 0 });
+        }
         p.hero = { ...p.hero, retinue: r };
         players[action.faction] = p;
         return { ...state, players };
@@ -372,6 +400,48 @@ export function gameReducer(state, action) {
       });
       players[action.faction] = p;
       return { ...state, players, map: { ...state.map, tiles } };
+    }
+
+    case "PROMOTE_STACK": {
+      // action: { faction, stackIndex, toUnit }
+      // FE-style class change: must be at STACK_LEVEL_CAP, target must be
+      // a valid branch in PROMOTIONS, player must afford the cost.
+      // Resets lvl to 1; xp is wiped (no overflow into the new tier).
+      const players = { ...state.players };
+      const p = { ...players[action.faction] };
+      const r = [...(p.hero.retinue || [])];
+      const stack = r[action.stackIndex];
+      if (!stack) return state;
+      const branches = PROMOTIONS[stack.unit] || [];
+      if (!branches.includes(action.toUnit)) return state;
+      if ((stack.lvl ?? 1) < STACK_LEVEL_CAP) return state;
+      const cost = promotionCost(stack.count);
+      if (p.gold < cost) return state;
+
+      // Merge into an existing stack of the target archetype if present —
+      // preserves the "one stack per archetype" invariant from RECRUIT.
+      const existingIdx = r.findIndex(
+        (s, i) => i !== action.stackIndex && s.unit === action.toUnit
+      );
+      if (existingIdx >= 0) {
+        r[existingIdx] = {
+          ...r[existingIdx],
+          count: r[existingIdx].count + stack.count,
+        };
+        r.splice(action.stackIndex, 1);
+      } else {
+        r[action.stackIndex] = {
+          ...stack,
+          unit: action.toUnit,
+          lvl: 1,
+          xp: 0,
+        };
+      }
+
+      p.gold -= cost;
+      p.hero = { ...p.hero, retinue: r };
+      players[action.faction] = p;
+      return { ...state, players };
     }
 
     case "EQUIP": {
@@ -428,10 +498,19 @@ export function gameReducer(state, action) {
       const tile = tiles.find((t) => t.id === action.tileId);
       const players = { ...state.players };
       const atk = { ...players[action.attacker] };
-      const atkRet = applyLosses(atk.hero.retinue, action.result.attackerLosses);
+      const atkRetAfterLoss = applyLosses(atk.hero.retinue, action.result.attackerLosses);
+      // FE-style stack XP: pool the same `result.xp` figure the hero earns
+      // and split it evenly across surviving stacks. Level-up loop inside
+      // awardStackXp clamps at STACK_LEVEL_CAP. Hero XP and stack XP are
+      // independent pools — neither steals from the other.
+      const xpPool = action.result.xp || 30;
+      const xpPerStack = atkRetAfterLoss.length
+        ? Math.floor(xpPool / atkRetAfterLoss.length)
+        : 0;
+      const atkRet = atkRetAfterLoss.map((s) => awardStackXp(s, xpPerStack));
       atk.hero = { ...atk.hero, retinue: atkRet };
       if (tile) tile.garrison = applyLosses(tile.garrison, action.result.defenderLosses);
-      atk.hero.xp += action.result.xp || 30;
+      atk.hero.xp += xpPool;
       while (atk.hero.xp >= heroXpForLevel(atk.hero.lvl + 1)) {
         const def = HEROES[atk.hero.id];
         atk.hero.lvl += 1;

@@ -38,3 +38,52 @@ export const UNITS = {
 
 export const unitsByFaction = (factionId) =>
   Object.values(UNITS).filter((u) => u.faction === factionId);
+
+/* ────────────────────────────────────────────────────────────────────────
+   Stack progression — Fire Emblem-style level + branched promotion.
+
+   Each retinue stack (`{ unit, count, lvl, xp }`) accumulates XP from
+   surviving battles and levels up. Levels grant a flat
+   `1 + 0.10 * (lvl - 1)` multiplier on hp / atk / def at battle init.
+
+   At STACK_LEVEL_CAP, the player can promote to a tier-up archetype
+   from the PROMOTIONS table. Promotion swaps `stack.unit` to the
+   chosen branch and resets level to 1 (XP overflow is discarded).
+   Tier-3 archetypes are the top — no further promotion.
+
+   Garrison stacks deliberately don't track level — promotion lives at
+   the strategic layer where the player makes the decision.
+   ──────────────────────────────────────────────────────────────────── */
+
+export const STACK_LEVEL_CAP = 5;
+
+/* XP needed to *reach* the next level. Mildly accelerating curve so each
+   level past 1 costs a bit more than the last. Tuned for ~7 wins to cap
+   at the typical ~25 XP/stack/battle pool size — fast enough to be felt
+   but slow enough that promotion is a real strategic choice.
+
+   Schedule: L2=25, L3=42, L4=61, L5=81 (sum 209). */
+export const xpForStackLevel = (lvl) => Math.round(10 * Math.pow(lvl, 1.3));
+
+/* Promotion graph — one or two branch options per source unit, by faction.
+   Tier-3 units omitted (they're already at the top). Bandits never promote. */
+export const PROMOTIONS = {
+  // Iron Crown
+  levy:       ["manAtArms"],
+  manAtArms:  ["knight", "ballista"],
+  // Saltborn Tide
+  raider:     ["harpooner"],
+  harpooner:  ["berserker", "warship"],
+  // Ashen Pact
+  acolyte:    ["wraith"],
+  wraith:     ["boneknight", "lich"],
+  // Thornwild
+  forager:    ["archer"],
+  archer:     ["druid", "treant"],
+};
+
+/* Gold cost charged when a player promotes a stack — scaled by stack size
+   so it remains a meaningful tradeoff for big squads. */
+export const PROMOTION_COST_PER_UNIT = 50;
+export const promotionCost = (count) => Math.max(0, PROMOTION_COST_PER_UNIT * count);
+

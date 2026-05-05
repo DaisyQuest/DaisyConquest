@@ -20,14 +20,21 @@ function heroHasPerk(bs, side, perkId) {
   return (hero.perks || []).includes(perkId);
 }
 
-function makeFighter(unitId, side, lane, idx, fac) {
+function makeFighter(unitId, side, lane, idx, fac, lvl = 1) {
   const u = UNITS[unitId];
+  // FE-style level scaling: +10% per level over 1 on hp/atk/def. Speed
+  // intentionally unscaled — speed feeds the targeting loop and small
+  // perturbations cascade weirdly. lvl defaults to 1 so legacy garrison
+  // stacks (no lvl field) still work.
+  const m = 1 + Math.max(0, (lvl - 1)) * 0.10;
   return {
     uid: side + "_" + unitId + "_" + lane + "_" + idx + "_" + Math.random().toString(36).slice(2, 6),
     kind: "unit",
     unitId, side, lane, fac,
-    hp: u.hp, maxHp: u.hp,
-    atk: u.atk, def: u.def, spd: u.spd, range: u.range,
+    lvl,
+    hp: Math.round(u.hp * m), maxHp: Math.round(u.hp * m),
+    atk: Math.round(u.atk * m), def: Math.round(u.def * m),
+    spd: u.spd, range: u.range,
     icon: u.icon, name: u.name, traits: u.traits || [],
     x: side === "L" ? 4 + idx * 2 : C().LANE_LENGTH - 4 - idx * 2,
     atkCd: 0, alive: true,
@@ -74,15 +81,19 @@ function spawnSide(retinue, hero, side, fac) {
   const fighters = [];
   fighters.push(makeHeroFighter(hero, side, fac));
   const lanes = [0, 1, 2];
+  // Flatten the retinue into per-individual {unitId, lvl} pairs so each
+  // soldier inherits its stack's level. Garrison stacks without a lvl
+  // field default to L1.
   const flat = [];
   for (const stack of retinue) {
-    for (let i = 0; i < stack.count; i++) flat.push(stack.unit);
+    const lvl = stack.lvl ?? 1;
+    for (let i = 0; i < stack.count; i++) flat.push({ unitId: stack.unit, lvl });
   }
-  flat.forEach((unitId, i) => {
+  flat.forEach(({ unitId, lvl }, i) => {
     const lane = lanes[i % 3];
     const idx = fighters.filter((f) => f.side === side && f.lane === lane).length;
     if (idx >= C().MAX_PER_LANE) return;
-    fighters.push(makeFighter(unitId, side, lane, idx, fac));
+    fighters.push(makeFighter(unitId, side, lane, idx, fac, lvl));
   });
   return fighters;
 }
