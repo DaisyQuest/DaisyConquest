@@ -1,16 +1,406 @@
-/* Defense — wave-based defense minigame. Click a unit in the tray, then
-   click a slot to deploy it along the path. Hold the base HP until the last
-   wave is cleared. */
-import { useEffect, useRef, useState } from "react";
+/* Defense — three modes share a single screen id "defense":
+   1. HUB (no pendingDefense, no training):   tabbed home for the system
+      — Overview shows live threats and at-risk holdings, Training launches
+      a practice raid, Log filters the campaign log to defense events.
+   2. GATE (pendingDefense set, solo):        a brace overlay before the
+      minigame so the player isn't dropped into a wave they can't react to.
+      In coop, the Handoff screen has already passed control, so we skip the
+      brace and go straight to the minigame.
+   3. MINIGAME (training OR pendingDefense):  the wave-based defense game
+      itself. Click a unit, click a slot, hold the base.
+
+   Routing is internal — the reducer still flips screen:"defense" the same
+   way for raids and training. The hub is reachable from the GoldBar nav. */
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../core/store.jsx";
 import { Defense } from "../systems/defense.js";
 import { FACTIONS, FACTION_LIST } from "../data/factions.js";
 import { UNITS } from "../data/units.js";
-import { TOWN_TYPES } from "../data/map.js";
+import { TOWN_TYPES, hexNeighbors } from "../data/map.js";
+import { GoldBar } from "../components/GoldBar.jsx";
+import { TutorialOverlay } from "../components/TutorialOverlay.jsx";
 
 export function DefenseScreen() {
+  const { state } = useStore();
+  const training = !!state.screenParams?.training;
+  const raidActive = !!state.pendingDefense;
+  if (!training && !raidActive) return <DefenseHub />;
+  return <DefenseGate training={training} />;
+}
+
+/* ── Hub ──────────────────────────────────────────────────────────── */
+
+const TABS = [
+  { id: "overview", label: "Overview", icon: "🛡️" },
+  { id: "training", label: "Training", icon: "🎯" },
+  { id: "log",      label: "Log",      icon: "📜" },
+];
+
+function DefenseHub() {
   const { state, dispatch } = useStore();
-  const training = state.screenParams.training;
+  const [tab, setTab] = useState("overview");
+  const humanIds = useMemo(
+    () => [state.humanFaction, state.coopFaction].filter(Boolean),
+    [state.humanFaction, state.coopFaction],
+  );
+  const atRisk = useMemo(
+    () => computeAtRiskTiles(state.map.tiles, humanIds),
+    [state.map.tiles, humanIds],
+  );
+
+  const tutorialSteps = [
+    {
+      selector: "[data-tut='nav-defense']",
+      side: "bottom",
+      title: "Defense nav badge",
+      body: "The red number counts your borders touching enemy land. When it spikes, expect a raid — bulk up the garrison or pull troops back.",
+    },
+    {
+      selector: ".panel-title",
+      side: "right",
+      title: "Defense hub tabs",
+      body: "Overview lists at-risk holdings. Training spawns a no-stakes wave drill. Log replays past sieges so you can review what worked.",
+    },
+  ];
+
+  return (
+    <div className="col" style={{ height: "100%" }}>
+      <GoldBar />
+      <TutorialOverlay stepId="defense.intro" steps={tutorialSteps} />
+      <div className="parchment full" style={{ padding: 16, overflowY: "auto" }}>
+        <div className="row between center" style={{ marginBottom: 8 }}>
+          <div className="row gap-2 center">
+            <div className="h-display" style={{ fontSize: 18 }}>🛡 Defense</div>
+            <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
+              Watch borders · drill garrisons · review sieges
+            </div>
+          </div>
+          <button
+            className="btn btn-ghost"
+            onClick={() => dispatch({ type: "SET_SCREEN", screen: "map" })}
+          >
+            ← Back to Map
+          </button>
+        </div>
+
+        <div className="row gap-2 tab-strip" style={{ marginBottom: 8 }}>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`btn ${tab === t.id ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => setTab(t.id)}
+            >
+              <span style={{ fontSize: 13 }}>{t.icon}</span> {t.label}
+              {t.id === "overview" && atRisk.length > 0 && (
+                <span
+                  className="pill"
+                  style={{
+                    marginLeft: 6,
+                    background: "var(--blood)",
+                    color: "#fff",
+                    fontWeight: 700,
+                  }}
+                >
+                  {atRisk.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {tab === "overview" && <OverviewTab atRisk={atRisk} humanIds={humanIds} />}
+        {tab === "training" && <TrainingTab humanIds={humanIds} />}
+        {tab === "log" && <LogTab />}
+      </div>
+    </div>
+  );
+}
+
+function OverviewTab({ atRisk, humanIds }) {
+  const { state, dispatch } = useStore();
+  const recentEvents = useMemo(
+    () => state.log.filter(isDefenseEvent).slice(-3).reverse(),
+    [state.log],
+  );
+
+  return (
+    <div className="col gap-2">
+      <div className="panel" style={{ padding: 10 }}>
+        <div className="row between center" style={{ marginBottom: 6 }}>
+          <div className="h-display" style={{ fontSize: 14 }}>At-Risk Holdings</div>
+          <span className="pill">{atRisk.length}</span>
+        </div>
+        {atRisk.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+            No borders threatened. Every tile you own is either deep in
+            friendly territory or well-garrisoned.
+          </div>
+        ) : (
+          <div className="col gap-1">
+            {atRisk.map((row) => (
+              <button
+                key={row.tile.id}
+                className="btn btn-ghost"
+                onClick={() =>
+                  dispatch({
+                    type: "SET_SCREEN",
+                    screen: "zone",
+                    params: { tileId: row.tile.id },
+                  })
+                }
+                style={{ justifyContent: "space-between", width: "100%", padding: "5px 10px", fontSize: 11 }}
+              >
+                <span className="row gap-2 center">
+                  <span style={{ fontSize: 16 }}>{TOWN_TYPES[row.tile.town]?.icon || "📍"}</span>
+                  <span>
+                    {TOWN_TYPES[row.tile.town]?.name || "Region"}
+                    <span style={{ fontSize: 10, color: "var(--ink-soft)", marginLeft: 6 }}>
+                      ({row.tile.q},{row.tile.r}) · {FACTIONS[row.tile.owner]?.short}
+                    </span>
+                  </span>
+                </span>
+                <span className="row gap-2 center">
+                  <span className="pill" title="Hostile neighbors">
+                    ⚔ {row.hostiles.length}
+                  </span>
+                  <span
+                    className="pill"
+                    style={{
+                      background: row.garrison < 2 ? "var(--blood)" : "var(--bg-3)",
+                      color: row.garrison < 2 ? "#fff" : "var(--ink)",
+                    }}
+                    title="Garrison strength"
+                  >
+                    🛡 {row.garrison}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="panel" style={{ padding: 10 }}>
+        <div className="row between center" style={{ marginBottom: 6 }}>
+          <div className="h-display" style={{ fontSize: 14 }}>Recent Activity</div>
+          <span style={{ fontSize: 10, color: "var(--ink-soft)" }}>
+            Held by: {humanIds.map((f) => FACTIONS[f]?.short).filter(Boolean).join(" + ") || "—"}
+          </span>
+        </div>
+        {recentEvents.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+            No raids or sieges logged yet.
+          </div>
+        ) : (
+          <div className="col" style={{ lineHeight: 1.4 }}>
+            {recentEvents.map((e, i) => (
+              <div key={i} style={{ fontSize: 11 }}>
+                <span style={{ color: "var(--ink-soft)" }}>R{e.round}</span> · {e.text}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TrainingTab({ humanIds }) {
+  const { state, dispatch } = useStore();
+  const ownedTowns = useMemo(
+    () =>
+      state.map.tiles.filter(
+        (t) => humanIds.includes(t.owner) && TOWN_TYPES[t.town]?.recruit,
+      ),
+    [state.map.tiles, humanIds],
+  );
+
+  const launch = (tileId) =>
+    dispatch({
+      type: "SET_SCREEN",
+      screen: "defense",
+      params: { tileId, training: true },
+    });
+
+  return (
+    <div className="panel" style={{ padding: 10 }}>
+      <div className="h-display" style={{ fontSize: 14, marginBottom: 4 }}>
+        Drill the Garrison
+      </div>
+      <div style={{ fontSize: 11, color: "var(--ink-soft)", marginBottom: 8 }}>
+        Run a no-stakes wave practice. Outcomes here don&apos;t affect tile
+        ownership or your retinue.
+      </div>
+      {ownedTowns.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+          You don&apos;t yet hold any town that can host a drill. Capture or
+          settle a town first.
+        </div>
+      ) : (
+        <div className="col gap-1">
+          {ownedTowns.map((t) => (
+            <button
+              key={t.id}
+              className="btn btn-ghost"
+              onClick={() => launch(t.id)}
+              style={{ justifyContent: "space-between", width: "100%", padding: "5px 10px", fontSize: 11 }}
+            >
+              <span className="row gap-2 center">
+                <span style={{ fontSize: 14 }}>{TOWN_TYPES[t.town]?.icon}</span>
+                <span>{TOWN_TYPES[t.town]?.name}</span>
+                <span style={{ fontSize: 10, color: "var(--ink-soft)" }}>
+                  ({t.q},{t.r})
+                </span>
+              </span>
+              <span className="pill" style={{ fontSize: 10 }}>▶ Drill</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LogTab() {
+  const { state } = useStore();
+  const events = useMemo(
+    () => state.log.filter(isDefenseEvent).slice().reverse(),
+    [state.log],
+  );
+  return (
+    <div className="panel" style={{ padding: 12 }}>
+      <div className="row between center" style={{ marginBottom: 6 }}>
+        <div className="h-display" style={{ fontSize: 14 }}>Defense Log</div>
+        {events.length > 0 && (
+          <span className="pill" style={{ fontSize: 10 }}>
+            {events.length} event{events.length === 1 ? "" : "s"}
+          </span>
+        )}
+      </div>
+      {events.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+          No defense events yet. The log fills as raids resolve.
+        </div>
+      ) : (
+        <div style={{ maxHeight: 240, overflowY: "auto", lineHeight: 1.5 }}>
+          {events.map((e, i) => (
+            <div key={i} style={{ fontSize: 12 }}>
+              <span style={{ color: "var(--ink-soft)" }}>R{e.round}</span> · {e.text}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Heuristic: keyword scan against the round log. Cheaper than threading a
+   typed event channel through every reducer branch. Keep keywords aligned
+   with the strings emitted in END_ROUND raid staging and RESOLVE_DEFENSE. */
+function isDefenseEvent(e) {
+  const t = e?.text || "";
+  return /march|wall|overran|defenders|seized|siege|raid/i.test(t);
+}
+
+/* At-risk = human-owned, has at least one AI-owned land neighbor.
+   Garrison count is reported separately so the UI can highlight low-
+   garrison tiles without filtering them out — a thinly-held interior tile
+   isn't "at risk", but a thinly-held border tile clearly is. */
+export function computeAtRiskTiles(tiles, humanIds) {
+  const humanSet = new Set(humanIds.filter(Boolean));
+  if (!humanSet.size) return [];
+  const out = [];
+  for (const t of tiles) {
+    if (!humanSet.has(t.owner)) continue;
+    const hostiles = hexNeighbors(t, tiles).filter(
+      (n) => n.owner && !humanSet.has(n.owner),
+    );
+    if (!hostiles.length) continue;
+    const garrison = (t.garrison || []).reduce((a, s) => a + (s.count || 0), 0);
+    out.push({ tile: t, hostiles, garrison });
+  }
+  // Sort: thinnest garrisons first, then most hostiles.
+  out.sort((a, b) => a.garrison - b.garrison || b.hostiles.length - a.hostiles.length);
+  return out;
+}
+
+/* ── Gate (brace overlay + minigame) ─────────────────────────────── */
+
+function DefenseGate({ training }) {
+  const { state } = useStore();
+  const isCoop = !!state.coopFaction;
+  // Coop already passes control via the Handoff screen — no second brace.
+  // Training is opt-in by definition.
+  const [braced, setBraced] = useState(isCoop || training);
+
+  if (!braced) {
+    return <BraceModal onReady={() => setBraced(true)} />;
+  }
+  return <DefenseMinigame />;
+}
+
+function BraceModal({ onReady }) {
+  const { state } = useStore();
+  const pd = state.pendingDefense;
+  const tile = pd ? state.map.tiles.find((t) => t.id === pd.tileId) : null;
+  const attackerFac = pd ? FACTIONS[pd.attackerFaction] : null;
+  const defenderFac = tile ? FACTIONS[tile.owner] : null;
+  const regionLabel = tile ? (TOWN_TYPES[tile.town]?.name || "your border") : "your border";
+
+  // Any keypress or click acknowledges. Bind on mount so tabbing in works
+  // even before the user mouses over the panel.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") return; // don't let Esc fire the raid
+      onReady();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onReady]);
+
+  return (
+    <div
+      onClick={onReady}
+      style={{
+        position: "absolute", inset: 0,
+        background: "radial-gradient(circle at center, rgba(72, 24, 24, 0.8), rgba(20, 8, 8, 0.95))",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 100, cursor: "pointer",
+      }}
+    >
+      <div className="panel pop-in" style={{ padding: 32, maxWidth: 480, textAlign: "center" }}>
+        <div className="h-display" style={{ fontSize: 28, color: "var(--blood)", marginBottom: 8 }}>
+          ⚔ RAID INCOMING
+        </div>
+        <div style={{ fontSize: 14, marginBottom: 4 }}>
+          {attackerFac
+            ? <><b style={{ color: attackerFac.palette.primary }}>{attackerFac.name}</b> marches on </>
+            : "An enemy host marches on "}
+          <b>{regionLabel}</b>
+          {defenderFac && (
+            <span style={{ color: "var(--ink-soft)" }}> ({defenderFac.short})</span>
+          )}.
+        </div>
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 16 }}>
+          Place defenders along the path. Hold the gate until the last wave
+          breaks. Click a unit, then click a slot to deploy.
+        </div>
+        <button className="btn btn-primary" onClick={onReady}>
+          Brace for the assault
+        </button>
+        <div style={{ fontSize: 10, color: "var(--ink-soft)", marginTop: 8 }}>
+          Press any key or click anywhere to begin.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Minigame ────────────────────────────────────────────────────── */
+
+function DefenseMinigame() {
+  const { state, dispatch } = useStore();
+  const training = !!state.screenParams?.training;
   // In real-mode, the tile under attack and the attacker faction live on
   // state.pendingDefense (staged at END_ROUND). In training, fall back to
   // the tile passed via screenParams and a hard-coded enemy faction.
@@ -33,6 +423,7 @@ export function DefenseScreen() {
     dsRef.current = Defense.init({
       defenderRetinue: defenderPlayer.hero.retinue.map((s) => ({ ...s })),
       attackerFaction: enemyFaction,
+      defenderPerks: defenderPlayer.hero.perks || [],
     });
   }
   const [ds, setDs] = useState(dsRef.current);

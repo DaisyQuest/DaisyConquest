@@ -37,7 +37,7 @@ export function pathPosAt(prog) {
 export const Defense = {
   PATH, pathPosAt,
 
-  init({ defenderRetinue, attackerFaction, waves = 3 }) {
+  init({ defenderRetinue, attackerFaction, defenderPerks = [], waves = 3 }) {
     const enemyFac = FACTIONS[attackerFaction];
     const waveList = [];
     for (let w = 0; w < waves; w++) {
@@ -53,6 +53,7 @@ export const Defense = {
       attackers: [],
       defenders: [],
       availableDefenders: defenderRetinue.map((s) => ({ ...s })),
+      defenderPerks,
       baseHp: 100,
       gold: 30,
       ended: false,
@@ -66,10 +67,13 @@ export const Defense = {
     if (!stack || stack.count <= 0) return ds;
     stack.count -= 1;
     const u = UNITS[unitId];
+    // perk_architect: garrison/defender units gain +1 effective defense
+    // when the side's hero has the architect capstone.
+    const archBonus = (ds.defenderPerks || []).includes("perk_architect") ? 1 : 0;
     ds.defenders.push({
       uid: "def_" + Math.random().toString(36).slice(2),
       unitId, slotIdx, hp: u.hp, maxHp: u.hp,
-      atk: u.atk, def: u.def, range: u.range,
+      atk: u.atk, def: u.def + archBonus, range: u.range,
       atkCd: 0, icon: u.icon, name: u.name,
     });
     return ds;

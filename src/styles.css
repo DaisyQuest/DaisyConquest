@@ -166,11 +166,16 @@ html, body {
   display: inline-flex; align-items: center; gap: 8px;
 }
 .btn:hover { background: var(--bg-3); transform: translateY(-1px); box-shadow: var(--shadow-2); }
-.btn:active { transform: translateY(1px); box-shadow: none; }
+.btn:active { transform: translateY(2px) scale(0.985); box-shadow: none; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 
-.btn-primary { background: var(--gold); color: var(--ink); border-color: var(--line); }
-.btn-primary:hover { background: var(--gold-lt); }
+.btn-primary {
+  background: var(--gold);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: var(--shadow-2), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.btn-primary:hover { background: var(--gold-lt); box-shadow: var(--shadow-3), inset 0 1px 0 rgba(255,255,255,0.22); }
 
 .btn-danger { background: var(--blood); color: #fff7ea; border-color: var(--line); }
 .btn-danger:hover { background: var(--blood-dk); }
@@ -383,6 +388,341 @@ html, body {
   100% { transform: translateY(-30px); opacity: 0; }
 }
 .float-up { animation: float-up 800ms ease-out forwards; }
+
+/* === Combat fighter & feedback === */
+/* Position is driven by `left`/`top` from JS (RAF). The transition makes the
+   per-tick steps read as smooth motion instead of a 30 Hz strobe. Movement
+   is short enough to not lag the actual state. Idle, lunge, hit-flash and
+   death are layered as compositable transforms/filters via classes that the
+   component flips on/off in response to gameplay events. */
+.bf-fighter {
+  transition: left 160ms ease-out, top 220ms ease-out;
+  will-change: transform, filter;
+}
+@keyframes bfIdle {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50%      { transform: translate(-50%, -50%) translateY(-2px); }
+}
+.bf-fighter.idle { animation: bfIdle 1600ms ease-in-out infinite; }
+@keyframes bfLungeL {
+  0%   { transform: translate(-50%, -50%) translateX(0); }
+  35%  { transform: translate(-50%, -50%) translateX(8px); }
+  100% { transform: translate(-50%, -50%) translateX(0); }
+}
+@keyframes bfLungeR {
+  0%   { transform: translate(-50%, -50%) translateX(0); }
+  35%  { transform: translate(-50%, -50%) translateX(-8px); }
+  100% { transform: translate(-50%, -50%) translateX(0); }
+}
+.bf-fighter.lunge.side-L { animation: bfLungeL 240ms ease-out; }
+.bf-fighter.lunge.side-R { animation: bfLungeR 240ms ease-out; }
+@keyframes bfHit {
+  /* Quick "punch" — flash white, shove outward, snap back. Shorter than
+     before so dense fights don't strobe; brightness eased down because
+     2.4× was overpowering the hue. */
+  0%   { filter: brightness(1.7) contrast(1.05) drop-shadow(0 0 6px rgba(255,240,200,0.8)); }
+  60%  { filter: brightness(1.1) drop-shadow(0 0 0 rgba(0,0,0,0)); }
+  100% { filter: brightness(1) saturate(1); }
+}
+.bf-fighter.hit { animation: bfHit 160ms ease-out; }
+@keyframes bfDeath {
+  /* Stagger up, lurch sideways, fall and fade. Slightly shorter so the
+     death poof reads cleanly even at 1× speed. */
+  0%   { transform: translate(-50%, -50%) scale(1) rotate(0); opacity: 1; filter: brightness(1.4); }
+  35%  { transform: translate(-50%, -56%) scale(1.18) rotate(-12deg); opacity: 0.95; filter: brightness(1.1); }
+  100% { transform: translate(-50%, -10%) scale(0.3) rotate(-50deg); opacity: 0; filter: brightness(0.6) saturate(0); }
+}
+.bf-fighter.dying { animation: bfDeath 420ms ease-in forwards; pointer-events: none; }
+@keyframes bfDeathPoof {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+}
+.bf-death-poof {
+  position: absolute;
+  width: 50px; height: 50px;
+  border: 2px solid rgba(255,255,255,0.7);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.35), transparent 70%);
+  pointer-events: none;
+  animation: bfDeathPoof 480ms ease-out forwards;
+  z-index: 4;
+}
+@keyframes bfLowHpPulse {
+  0%, 100% { box-shadow: 0 2px 6px rgba(0,0,0,0.4), 0 0 0 0 rgba(220,40,40,0); }
+  50%      { box-shadow: 0 2px 6px rgba(0,0,0,0.4), 0 0 0 6px rgba(220,40,40,0.18); }
+}
+.bf-fighter.low-hp { animation: bfLowHpPulse 1100ms ease-in-out infinite; }
+@keyframes bfHeroReady {
+  0%, 100% { box-shadow: 0 4px 14px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3), 0 0 0 0 rgba(255,210,90,0); }
+  50%      { box-shadow: 0 4px 14px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3), 0 0 0 4px rgba(255,210,90,0.55); }
+}
+.bf-fighter.hero-ready { animation: bfHeroReady 1400ms ease-in-out infinite; }
+
+/* HP bar fill — a width transition makes each hit shrink the bar over a
+   few hundred ms instead of snapping. Read-only visual tween, no game state
+   coupling. */
+.bf-hp-fill { transition: width 240ms ease-out, background-color 240ms ease; }
+
+/* Damage / heal floats — each kind gets its own colour and weight so a
+   crit reads instantly different from a normal swing, and a heal isn't
+   mistaken for a hit. Magnitude scales the font size so a 40-dmg blast
+   actually looks like a 40-dmg blast. */
+.dmg-float {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  text-shadow: 0 0 4px rgba(0,0,0,0.7), 0 2px 0 rgba(0,0,0,0.5);
+  animation: float-up 800ms ease-out forwards;
+  z-index: 12;
+}
+.dmg-float.hit   { color: #ffe1e1; }
+.dmg-float.crit {
+  color: #ffd54a;
+  text-shadow:
+    0 0 8px rgba(255,160,40,0.95),
+    0 0 16px rgba(255,200,80,0.6),
+    0 2px 0 rgba(0,0,0,0.7);
+  animation: float-up 1200ms ease-out forwards, critPop 320ms cubic-bezier(.24,1.6,.5,1);
+}
+.dmg-float.heal  { color: #b6f0a8; text-shadow: 0 0 6px rgba(95,176,95,0.6), 0 2px 0 rgba(0,0,0,0.6); }
+.dmg-float.drain { color: #e2a3e8; text-shadow: 0 0 6px rgba(168,80,200,0.5), 0 2px 0 rgba(0,0,0,0.6); }
+.dmg-float.splash { color: #ffb874; text-shadow: 0 0 6px rgba(255,140,60,0.55), 0 2px 0 rgba(0,0,0,0.6); }
+@keyframes critPop {
+  0%   { transform: translate(-50%, -50%) scale(0.3) rotate(-6deg); }
+  55%  { transform: translate(-50%, -50%) scale(1.5) rotate(4deg); }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(0); }
+}
+
+/* AOE burst — outer ring expands while an inner ring blooms slightly
+   slower for depth. Both pulse off the primary target's position. */
+@keyframes aoeRing {
+  0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0.9; border-width: 6px; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0;    border-width: 1px; }
+}
+@keyframes aoeRingInner {
+  0%   { transform: translate(-50%, -50%) scale(0.1); opacity: 0.95; }
+  60%  { transform: translate(-50%, -50%) scale(1.6); opacity: 0.4;  }
+  100% { transform: translate(-50%, -50%) scale(2.0); opacity: 0;    }
+}
+.aoe-burst {
+  position: absolute;
+  width: 60px; height: 60px;
+  border: 6px solid rgba(255,184,116,0.9);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: aoeRing 540ms ease-out forwards;
+  z-index: 6;
+  box-shadow: 0 0 16px rgba(255,184,116,0.4);
+}
+.aoe-burst::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,224,170,0.45), transparent 65%);
+  animation: aoeRingInner 420ms ease-out forwards;
+}
+
+/* Heal sparkle */
+@keyframes healSparkle {
+  0%   { transform: translate(-50%, -50%) scale(0.3); opacity: 0.9; }
+  60%  { transform: translate(-50%, -50%) scale(1.4); opacity: 0.7; }
+  100% { transform: translate(-50%, -55%) scale(1.8); opacity: 0; }
+}
+.heal-sparkle {
+  position: absolute;
+  width: 44px; height: 44px;
+  border: 3px solid rgba(146,224,144,0.8);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(146,224,144,0.4), transparent 70%);
+  pointer-events: none;
+  animation: healSparkle 600ms ease-out forwards;
+  z-index: 6;
+}
+
+/* Battlefield-wide screen shake — applied to .battlefield root for a few
+   hundred ms whenever something dramatic lands (big hit, ability, hero
+   wound). Stronger amplitude than the panel `.shake`. */
+@keyframes bfShake {
+  0%, 100% { transform: translate(0, 0); }
+  20%      { transform: translate(-4px, 1px); }
+  40%      { transform: translate(4px, -1px); }
+  60%      { transform: translate(-2px, 2px); }
+  80%      { transform: translate(2px, 0); }
+}
+.battlefield.shaking { animation: bfShake 220ms ease-in-out; }
+
+/* Edge vignette flash — fires for one beat when an ability is cast or a
+   hero is struck. Soft, doesn't obscure gameplay. */
+@keyframes bfEdgeFlash {
+  0%   { box-shadow: inset 0 0 0 0 rgba(255,210,90,0); }
+  20%  { box-shadow: inset 0 0 60px 12px rgba(255,210,90,0.35); }
+  100% { box-shadow: inset 0 0 0 0 rgba(255,210,90,0); }
+}
+.battlefield.edge-flash { animation: bfEdgeFlash 380ms ease-out; }
+@keyframes bfEdgeFlashRed {
+  0%   { box-shadow: inset 0 0 0 0 rgba(196,74,74,0); }
+  20%  { box-shadow: inset 0 0 60px 12px rgba(196,74,74,0.4); }
+  100% { box-shadow: inset 0 0 0 0 rgba(196,74,74,0); }
+}
+.battlefield.edge-flash-red { animation: bfEdgeFlashRed 380ms ease-out; }
+
+/* Hero ability cast flash — bright burst around the hero portrait when
+   they fire an ability so the player's eye snaps to the bottom bar. */
+@keyframes heroCastFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(255,210,90,0.0); transform: scale(1); }
+  35%  { box-shadow: 0 0 0 14px rgba(255,210,90,0.6); transform: scale(1.06); }
+  100% { box-shadow: 0 0 0 22px rgba(255,210,90,0);   transform: scale(1); }
+}
+.hero-cast-flash { animation: heroCastFlash 520ms ease-out; }
+
+/* Hero portrait health flash — used in the bottom bar so the player's eye
+   is drawn back to their hero card when they take a meaningful chunk. */
+@keyframes heroPortraitFlash {
+  0%   { box-shadow: 0 0 0 6px rgba(220,40,40,0.6); }
+  100% { box-shadow: 0 0 0 0 rgba(220,40,40,0); }
+}
+.hero-portrait-flash { animation: heroPortraitFlash 400ms ease-out; }
+
+/* Battle intro: a brief drop-in from the top so the curtain rise reads as
+   "the field is set." Short — doesn't gate gameplay. */
+@keyframes battleIntro {
+  0%   { transform: translateY(-12px) scale(0.98); opacity: 0; }
+  100% { transform: translateY(0) scale(1);       opacity: 1; }
+}
+.battle-intro { animation: battleIntro 360ms ease-out; }
+
+/* Targeting line — drawn between attacker and target on hover, faint */
+.targeting-line { stroke: rgba(255,230,170,0.55); stroke-width: 2; stroke-dasharray: 4 3; }
+
+/* Generic interactive-card lift. Apply to .panel rows that act as buttons
+   (recruit rows, shop items, glossary cards, retinue rows). Subtle —
+   doesn't compete with btn hover but still telegraphs "this is clickable". */
+.panel.slide-up,
+.panel[role="button"],
+.panel[onclick],
+.recruit-row,
+.shop-item,
+.glossary-card {
+  transition: transform 140ms ease-out, box-shadow 140ms ease-out;
+}
+.panel.slide-up:hover,
+.panel[role="button"]:hover,
+.panel[onclick]:hover,
+.recruit-row:hover,
+.shop-item:hover,
+.glossary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 rgba(42,29,18,0.22), 0 1px 0 rgba(42,29,18,0.18);
+}
+
+/* Pill hover — micro-feedback so the player knows pills with `title=`
+   tooltips are interactive (helps trait pills feel like reference data). */
+.pill {
+  transition: background-color 120ms ease, transform 120ms ease;
+}
+.pill[title]:hover {
+  background: var(--bg-3);
+  transform: translateY(-1px);
+}
+
+/* Tab-button active indicator — a thin gold underline gives the chosen
+   tab a stronger visual anchor than the existing background fill alone.
+   Applies anywhere a .btn-primary lives in a tab strip context. */
+.tab-strip .btn { position: relative; }
+.tab-strip .btn-primary::after {
+  content: "";
+  position: absolute;
+  left: 12%; right: 12%; bottom: -6px;
+  height: 3px;
+  background: var(--gold-dk);
+  border-radius: 2px;
+  box-shadow: 0 1px 0 rgba(255,210,90,0.6);
+}
+
+/* Soft screen transition — full-bleed parchment screens fade in on mount
+   so navigating between map / upgrade / shop / etc. doesn't feel like a
+   snap. Excludes parchments inside the battlefield so combat doesn't
+   double up on its own intro animation. */
+@keyframes screenFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.parchment.full,
+.parchment[style*="100%"] {
+  animation: screenFade 220ms ease-out;
+}
+.parchment.full .parchment {
+  animation: none;
+}
+
+/* === Tutorial overlay ===
+   Big chunky arrows + parchment tooltip pointing at a real DOM element.
+   Pointer events stay off on the overlay root so the game continues to
+   accept clicks underneath; the tooltip itself opts pointer-events back
+   in. Pulse on the arrow draws the eye. */
+@keyframes tutArrowPulse {
+  0%, 100% { stroke-width: 6; opacity: 0.95; }
+  50%      { stroke-width: 9; opacity: 1.0; }
+}
+.tut-arrow { animation: tutArrowPulse 900ms ease-in-out infinite; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55)); }
+
+@keyframes tutRingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,210,90,0.65), 0 0 0 4px rgba(255,210,90,0.85); }
+  50%      { box-shadow: 0 0 0 8px rgba(255,210,90,0.20), 0 0 0 4px rgba(255,210,90,0.95); }
+}
+.tut-ring {
+  border: 3px solid var(--gold);
+  background: transparent;
+  pointer-events: none;
+  animation: tutRingPulse 1200ms ease-in-out infinite;
+}
+
+.tut-card {
+  width: 300px;
+  max-width: min(92vw, 360px);
+  padding: 10px 12px 10px;
+  background: linear-gradient(180deg, #faecc8 0%, #ead7a0 100%);
+  border: 3px solid #2a1d12;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,210,90,0.45);
+  color: var(--ink);
+}
+.tut-card-step {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 2px;
+}
+.tut-card-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  color: var(--ink);
+}
+.tut-card-body {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.tut-progress {
+  display: flex; gap: 3px;
+  margin-top: 6px; margin-bottom: 6px;
+}
+.tut-progress > span {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(42,29,18,0.18);
+}
+.tut-progress > span.done { background: var(--gold-dk); }
+.tut-progress > span.cur  { background: var(--gold); }
 
 /* === Top bar === */
 .topbar {

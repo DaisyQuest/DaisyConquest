@@ -9,7 +9,7 @@ export const CONST = {
   BATTLE: {
     LANE_LENGTH: 100,
     TICK_MS: 33,
-    DEFAULT_SPEED: 3.0,    // base pace — battle resolves quickly
+    DEFAULT_SPEED: 1.0,    // base pace — readable at a glance; scrub up to 5× from the toolbar
     LANE_COUNT: 3,
     MAX_PER_LANE: 8,
     HERO_REGEN_MP: 1.6,

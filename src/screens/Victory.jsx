@@ -37,26 +37,26 @@ export function VictoryScreen() {
 
   return (
     <div className="parchment full" style={{
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
     }}>
-      <div className="panel pop-in" style={{ maxWidth: 720, width: "100%" }}>
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 56 }}>{winner ? "👑" : "💀"}</div>
+      <div className="panel pop-in" style={{ maxWidth: 680, width: "100%", padding: 14 }}>
+        <div style={{ textAlign: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 40 }}>{winner ? "👑" : "💀"}</div>
           <div className="h-display" style={{
-            fontSize: 32,
+            fontSize: 24,
             color: winner ? "var(--gold-dk)" : "var(--blood)",
             letterSpacing: "0.06em",
           }}>{headline}</div>
-          <div style={{ fontSize: 13, color: "var(--ink-soft)", fontStyle: "italic", marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: "var(--ink-soft)", fontStyle: "italic", marginTop: 2 }}>
             {blurb}
           </div>
         </div>
 
         {winner && (
-          <div className="row gap-3 center" style={{ justifyContent: "center", marginBottom: 16 }}>
-            <Crest faction={winner.id} size={80} ringed />
-            <div className="col" style={{ textAlign: "left" }}>
-              <div className="h-display" style={{ fontSize: 18 }}>{winner.name}</div>
+          <div className="row gap-2 center" style={{ justifyContent: "center", marginBottom: 8 }}>
+            <Crest faction={winner.id} size={56} ringed />
+            <div className="col" style={{ textAlign: "left", lineHeight: 1.2 }}>
+              <div className="h-display" style={{ fontSize: 15 }}>{winner.name}</div>
               <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
                 Crowned in Round {totalRounds}
               </div>
@@ -64,36 +64,36 @@ export function VictoryScreen() {
           </div>
         )}
 
-        <div className="row gap-3 center" style={{ justifyContent: "center", marginBottom: 16 }}>
-          <span className="pill">Total Rounds: {totalRounds}</span>
+        <div className="row gap-2 center" style={{ justifyContent: "center", marginBottom: 8 }}>
+          <span className="pill">Rounds: {totalRounds}</span>
           <span className="pill">Houses Standing: {tileCounts.filter((t) => !t.defeated).length}</span>
         </div>
 
-        <div className="panel" style={{ background: "var(--bg-1)", marginBottom: 16 }}>
-          <div className="panel-title">Final Holdings</div>
-          <div className="col gap-1">
+        <div className="panel" style={{ background: "var(--bg-1)", marginBottom: 10, padding: 8 }}>
+          <div className="panel-title" style={{ marginBottom: 4 }}>Final Holdings</div>
+          <div className="col" style={{ lineHeight: 1.4 }}>
             {tileCounts.map((t) => (
               <div key={t.fid} className="row between center" style={{ fontSize: 12 }}>
                 <span className="row gap-2 center">
-                  <Crest faction={t.fid} size={24} />
+                  <Crest faction={t.fid} size={20} />
                   <span style={{
                     textDecoration: t.defeated ? "line-through" : "none",
                     color: t.defeated ? "var(--ink-soft)" : "var(--ink)",
                   }}>{t.fac.short}</span>
                   {t.defeated && (
-                    <span className="pill" style={{ fontSize: 10 }}>fallen</span>
+                    <span className="pill" style={{ fontSize: 9 }}>fallen</span>
                   )}
                 </span>
                 <span className="numeric h-display" style={{
                   color: t.count > 0 ? "var(--ink)" : "var(--ink-soft)",
-                  fontSize: 16,
+                  fontSize: 14,
                 }}>{t.count}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="row gap-3 center" style={{ justifyContent: "center" }}>
+        <div className="row gap-2 center" style={{ justifyContent: "center" }}>
           <button className="btn btn-primary" onClick={newCampaign}>
             ⚔ New Campaign
           </button>

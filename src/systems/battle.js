@@ -9,7 +9,7 @@
 
 import { CONST } from "../core/constants.js";
 import { UNITS } from "../data/units.js";
-import { ITEMS } from "../data/items.js";
+import { ITEMS, equipmentEffects } from "../data/items.js";
 import { HEROES } from "../data/heroes.js";
 
 const C = () => CONST.BATTLE;
@@ -50,6 +50,10 @@ function makeHeroFighter(hero, side, fac) {
   let dfn = def.base.def + (hero.lvl - 1) * def.perRank.def;
   let hp  = hero.maxHp;
   let spd = def.base.spd;
+  // Equipment grants extra unit-traits (drain/holy/pierce/shield/bulwark/rally
+  // /undying) — they slot into the hero's `traits` so the existing trait
+  // checks in the tick loop work without modification.
+  const heroTraits = ["hero"];
   for (const slot of ["weapon", "armor", "trinket", "mount"]) {
     const id = hero.equipment?.[slot];
     if (!id) continue;
@@ -59,13 +63,38 @@ function makeHeroFighter(hero, side, fac) {
     dfn += it.stats.def || 0;
     hp  += it.stats.hp  || 0;
     spd += it.stats.spd || 0;
+    for (const eff of it.effects || []) {
+      if (eff.kind === "grantTrait" && eff.trait && !heroTraits.includes(eff.trait)) {
+        heroTraits.push(eff.trait);
+      }
+    }
+  }
+  // passiveStat: multiplicative bumps applied after flat stats. Stacks
+  // across slots since each effect is a separate multiplier.
+  for (const eff of equipmentEffects(hero, "passiveStat")) {
+    const m = eff.mul || {};
+    if (m.atk) atk = Math.round(atk * m.atk);
+    if (m.def) dfn = Math.round(dfn * m.def);
+    if (m.hp)  hp  = Math.round(hp  * m.hp);
+    if (m.spd) spd = spd * m.spd;
+  }
+  // Stance bakes into the spawned fighter's atk/def so all the per-tick
+  // damage math stays untouched. Aggressive trades def for atk; defensive
+  // does the inverse; balanced (default) is a no-op.
+  const stance = hero.behavior?.stance || "balanced";
+  if (stance === "aggressive") {
+    atk = Math.round(atk * 1.20);
+    dfn = Math.round(dfn * 0.85);
+  } else if (stance === "defensive") {
+    atk = Math.round(atk * 0.90);
+    dfn = Math.round(dfn * 1.25);
   }
   return {
     uid: side + "_hero",
     kind: "hero",
     heroId: hero.id, side, lane: 1, fac,
     hp, maxHp: hp, atk, def: dfn, spd, range: 1,
-    icon: def.portrait, name: def.name, traits: ["hero"],
+    icon: def.portrait, name: def.name, traits: heroTraits,
     x: side === "L" ? 8 : C().LANE_LENGTH - 8,
     atkCd: 0, alive: true,
     mp: hero.mp ?? hero.maxMp ?? 30,
@@ -74,29 +103,92 @@ function makeHeroFighter(hero, side, fac) {
     abilities: def.abilities,
     perks: hero.perks || [],
     didCharge: false,
+    // Behavior travels with the fighter so the targeting and auto-cast
+    // logic inside the tick loop has a stable per-side reference.
+    behavior: hero.behavior || { stance: "balanced", targeting: "closest", autoCast: false },
+    // Runtime trigger lists pulled from equipment. Cheap to read each tick;
+    // we resolve them via small helpers below.
+    onCritEffects:  equipmentEffects(hero, "onCrit"),
+    onKillEffects:  equipmentEffects(hero, "onKill"),
+    onLowHPEffects: equipmentEffects(hero, "onLowHP"),
+    damageVsEffects: equipmentEffects(hero, "damageVs"),
   };
+}
+
+/* Active onLowHP modifier on a hero fighter. Picks the largest matching
+   atk/def multiplier across triggered effects (no double-stacking). Returns
+   1 for non-heroes or when no thresholds are crossed. */
+function activeLowHpMul(fighter, kind) {
+  if (fighter.kind !== "hero") return 1;
+  const list = fighter.onLowHPEffects;
+  if (!list || !list.length) return 1;
+  const ratio = fighter.hp / fighter.maxHp;
+  let m = 1;
+  for (const eff of list) {
+    if (ratio < (eff.below ?? 0) && eff.mul && eff.mul[kind]) {
+      m *= eff.mul[kind];
+    }
+  }
+  return m;
+}
+
+/* Apply an effect-action list (onCrit / onKill) to the source hero.
+   Restores HP/MP, or accumulates `bs.heroBonusGold[side]` for post-battle
+   payout. Spawns a float so the player sees the trigger fire. */
+function applyEffectActions(effects, hero, bs) {
+  if (!effects || !effects.length) return;
+  for (const eff of effects) {
+    const a = eff.action;
+    if (!a) continue;
+    const v = a.value || 0;
+    if (a.type === "mp") {
+      hero.mp = Math.min(hero.maxMp, hero.mp + v);
+      bs.floats.push({
+        id: Math.random().toString(36).slice(2),
+        x: hero.x, lane: hero.lane, side: hero.side,
+        text: `+${v} MP`, kind: "heal", t: 0,
+      });
+    } else if (a.type === "heal") {
+      hero.hp = Math.min(hero.maxHp, hero.hp + v);
+      bs.floats.push({
+        id: Math.random().toString(36).slice(2),
+        x: hero.x, lane: hero.lane, side: hero.side,
+        text: `+${v}`, kind: "heal", t: 0,
+      });
+    } else if (a.type === "gold") {
+      bs.heroBonusGold = bs.heroBonusGold || { L: 0, R: 0 };
+      bs.heroBonusGold[hero.side] = (bs.heroBonusGold[hero.side] || 0) + v;
+    }
+  }
 }
 
 function spawnSide(retinue, hero, side, fac) {
   const fighters = [];
   fighters.push(makeHeroFighter(hero, side, fac));
   const lanes = [0, 1, 2];
-  // Flatten the retinue into per-individual {unitId, lvl} pairs so each
-  // soldier inherits its stack's level. Garrison stacks without a lvl
-  // field default to L1.
-  const flat = [];
+  // Each stack carries an optional `lane` (0=vanguard, 1=center, 2=reserve)
+  // that the player set in the ARMY tab. Stacks without a chosen lane fall
+  // back to round-robin so freshly recruited troops still distribute.
+  // We track a separate auto-counter so manual placements don't perturb
+  // round-robin balance for the unassigned remainder.
+  let autoCursor = 0;
   for (const stack of retinue) {
     const lvl = stack.lvl ?? 1;
-    for (let i = 0; i < stack.count; i++) flat.push({ unitId: stack.unit, lvl });
+    const chosenLane = stack.lane;
+    for (let i = 0; i < stack.count; i++) {
+      const lane = (chosenLane === 0 || chosenLane === 1 || chosenLane === 2)
+        ? chosenLane
+        : lanes[(autoCursor++) % 3];
+      const idx = fighters.filter((f) => f.side === side && f.lane === lane).length;
+      if (idx >= C().MAX_PER_LANE) continue;
+      fighters.push(makeFighter(unitId(stack), side, lane, idx, fac, lvl));
+    }
   }
-  flat.forEach(({ unitId, lvl }, i) => {
-    const lane = lanes[i % 3];
-    const idx = fighters.filter((f) => f.side === side && f.lane === lane).length;
-    if (idx >= C().MAX_PER_LANE) return;
-    fighters.push(makeFighter(unitId, side, lane, idx, fac, lvl));
-  });
   return fighters;
 }
+
+// Tiny helper to keep the spawn loop readable.
+function unitId(stack) { return stack.unit; }
 
 function snapshotCounts(stacks) {
   const m = {};
@@ -121,6 +213,9 @@ export const Battle = {
       defenderStart: snapshotCounts(defenderGarrison),
       floats: [],
       timers: [],
+      // Equipment payouts (onCrit/onKill type:"gold") accumulate here and are
+      // surfaced via summarize() so RESOLVE_BATTLE can credit the attacker.
+      heroBonusGold: { L: 0, R: 0 },
     };
   },
 
@@ -144,9 +239,26 @@ export const Battle = {
     for (const f of bs.fighters) {
       if (!f.alive) continue;
       if (f.kind === "hero") {
-        f.mp = Math.min(f.maxMp, f.mp + CONST.BATTLE.HERO_REGEN_MP * dt);
+        // perk_moonweave: hero MP regen ×1.5
+        const mpMul = (f.perks || []).includes("perk_moonweave") ? 1.5 : 1.0;
+        f.mp = Math.min(f.maxMp, f.mp + CONST.BATTLE.HERO_REGEN_MP * mpMul * dt);
         for (const k of Object.keys(f.cooldowns)) {
           f.cooldowns[k] = Math.max(0, f.cooldowns[k] - dt);
+        }
+        // Auto-cast: if the player set the hero to fire abilities on its
+        // own, scan slots in order and trigger the first ready one. We
+        // mutate bs in place via castAbility (returns the same object
+        // since we already cloned the fighter array before the tick).
+        if (f.behavior?.autoCast && f.alive) {
+          for (const a of f.abilities) {
+            const cd = f.cooldowns[a.id] || 0;
+            const cost = (f.perks?.includes("perk_tactician") ? Math.round(a.cost * 0.8) : a.cost);
+            const free = f.perks?.includes("perk_untold") && !f.untoldUsed;
+            if (cd > 0) continue;
+            if (!free && f.mp < cost) continue;
+            Battle.castAbility(bs, f.side, a.id);
+            break; // one cast per tick is enough; next tick can fire another
+          }
         }
       }
       f.atkCd = Math.max(0, f.atkCd - dt);
@@ -154,13 +266,53 @@ export const Battle = {
 
     for (const f of bs.fighters) {
       if (!f.alive) continue;
+
+      // heal: support trait — if a same-lane ally is below 85% HP and within
+      // a generous heal radius, channel into healing them instead of attacking.
+      // Falls through to the normal attack flow when no one needs mending.
+      if (f.atkCd <= 0 && (f.traits || []).includes("heal")) {
+        const wounded = bs.fighters.filter((o) =>
+          o.alive && o.side === f.side && o.uid !== f.uid && o.lane === f.lane && o.hp < o.maxHp * 0.85
+        );
+        if (wounded.length) {
+          const ally = wounded.reduce((a, b) => (a.hp / a.maxHp < b.hp / b.maxHp ? a : b));
+          if (Math.abs(ally.x - f.x) <= Math.max(f.range, 3)) {
+            const amount = Math.max(2, Math.round(f.atk * 0.8));
+            ally.hp = Math.min(ally.maxHp, ally.hp + amount);
+            bs.floats.push({
+              id: Math.random().toString(36).slice(2),
+              x: ally.x, lane: ally.lane, side: ally.side,
+              text: `+${amount}`, kind: "heal", t: 0,
+            });
+            f.atkCd = CONST.BATTLE.ATTACK_COOLDOWN;
+            tickEvents.push({ kind: "heal", from: f.uid, to: ally.uid, amount });
+            continue;
+          }
+        }
+      }
+
       const enemies = bs.fighters.filter((o) => o.alive && o.side !== f.side);
       let target = null;
       const inSameLane = enemies.filter((o) => o.lane === f.lane);
-      if (inSameLane.length) {
-        target = inSameLane.reduce((a, b) => (Math.abs(a.x - f.x) < Math.abs(b.x - f.x) ? a : b));
+      const closest = (pool) => pool.reduce((a, b) =>
+        (Math.abs(a.x - f.x) < Math.abs(b.x - f.x) ? a : b));
+      // Hero targeting can be reshaped by the player's pre-battle
+      // selection. Non-heroes always use the existing closest-in-lane
+      // algorithm so per-trooper AI stays cheap.
+      const heroPick = f.kind === "hero" && f.behavior?.targeting;
+      if (heroPick && heroPick !== "closest" && inSameLane.length) {
+        if (heroPick === "wounded") {
+          target = inSameLane.reduce((a, b) => (a.hp / a.maxHp < b.hp / b.maxHp ? a : b));
+        } else if (heroPick === "threat") {
+          target = inSameLane.reduce((a, b) => (a.atk > b.atk ? a : b));
+        } else if (heroPick === "support") {
+          const supports = inSameLane.filter((o) => (o.traits || []).includes("heal"));
+          target = supports.length ? closest(supports) : closest(inSameLane);
+        }
+      } else if (inSameLane.length) {
+        target = closest(inSameLane);
       } else if (enemies.length) {
-        target = enemies.reduce((a, b) => (Math.abs(a.x - f.x) < Math.abs(b.x - f.x) ? a : b));
+        target = closest(enemies);
       }
       f.target = target?.uid || null;
       if (!target) continue;
@@ -182,7 +334,59 @@ export const Battle = {
             && heroHasPerk(bs, target.side, "perk_apex")) {
           effDef = effDef * 1.3;
         }
+        // onLowHP (target): equipment grants def buff while bloodied.
+        if (target.kind === "hero") {
+          effDef = effDef * activeLowHpMul(target, "def");
+        }
+        // bulwark: target trait. Effective +50% defense — built like a wall.
+        if ((target.traits || []).includes("bulwark")) {
+          effDef = effDef * 1.5;
+        }
+        // pierce: attacker trait. Halves effective defense (post-perk/bulwark)
+        // — heavy bolts and bone arrows treat plate as paper.
+        if ((f.traits || []).includes("pierce")) {
+          effDef = effDef * 0.5;
+        }
         let dmg = Math.max(1, Math.round(f.atk * (1 + variance) - effDef * 0.5));
+        // shield: target trait, melee-only — round shields shrug 25% off the
+        // first strike but offer nothing against arrows or siege.
+        if ((target.traits || []).includes("shield") && f.range === 1) {
+          dmg = Math.max(1, Math.round(dmg * 0.75));
+        }
+        // holy: attacker trait. +30% vs Ash faction or anything that draws
+        // power from death (undying / drain). Crusader-flavored: useless
+        // most of the time, terrifying when it matters.
+        if ((f.traits || []).includes("holy")) {
+          const t = target.traits || [];
+          if (target.fac === "ash" || t.includes("undying") || t.includes("drain")) {
+            dmg = Math.round(dmg * 1.3);
+          }
+        }
+        // pike: attacker trait. +50% vs vanguards and charge units — anti-
+        // cavalry hedge. Spear formations punish heavy melee, do nothing
+        // remarkable against archers or supports.
+        if ((f.traits || []).includes("pike")) {
+          const t = target.traits || [];
+          if (target.role === "vanguard" || t.includes("charge")) {
+            dmg = Math.round(dmg * 1.5);
+          }
+        }
+        // siege: attacker trait. +25% vs heavy targets (maxHp >= 50). Lets
+        // ballistas/warmachines feel like artillery — wasted on light skirms,
+        // murder on knights and treants.
+        if ((f.traits || []).includes("siege") && target.maxHp >= 50) {
+          dmg = Math.round(dmg * 1.25);
+        }
+        // rally: a banner-bearer in the same lane lifts every other ally's
+        // damage by 10%. The banner itself doesn't get the bonus, and we
+        // cap at one stack regardless of how many banners are present.
+        const rallying = bs.fighters.some((o) =>
+          o.alive && o.side === f.side && o.uid !== f.uid
+          && o.lane === f.lane && (o.traits || []).includes("rally")
+        );
+        if (rallying && !(f.traits || []).includes("rally")) {
+          dmg = Math.round(dmg * 1.1);
+        }
         let isCrit = false;
         if (f.traits.includes("crit") && Math.random() < 0.2) {
           dmg = Math.round(dmg * 1.6);
@@ -192,6 +396,23 @@ export const Battle = {
         // perk_strike: +10% melee damage when attacker is range 1 and same-side hero has it
         if (f.range === 1 && heroHasPerk(bs, f.side, "perk_strike")) {
           dmg = Math.round(dmg * 1.1);
+        }
+        // perk_marksman: +15% damage from ranged attackers (range > 1)
+        if (f.range > 1 && heroHasPerk(bs, f.side, "perk_marksman")) {
+          dmg = Math.round(dmg * 1.15);
+        }
+        // perk_vanguard: +20% damage in the opening seconds — kickoff burst
+        if (bs.time < 5 && heroHasPerk(bs, f.side, "perk_vanguard")) {
+          dmg = Math.round(dmg * 1.2);
+        }
+        // perk_executioner: +25% damage to wounded foes (<30% HP)
+        if (target.hp / target.maxHp < 0.3 && heroHasPerk(bs, f.side, "perk_executioner")) {
+          dmg = Math.round(dmg * 1.25);
+        }
+        // perk_warlord: ally aura — every troop on the side deals +8% if
+        // the side's hero has the capstone. Heroes don't double-dip.
+        if (f.kind === "unit" && heroHasPerk(bs, f.side, "perk_warlord")) {
+          dmg = Math.round(dmg * 1.08);
         }
         // perk_lance: +25% on charge (first attack) for mounted units (knight, or vanguard with "charge")
         const isMounted = f.unitId === "knight"
@@ -206,18 +427,120 @@ export const Battle = {
             && heroHasPerk(bs, f.side, "perk_apex")) {
           dmg = Math.round(dmg * 1.3);
         }
+        // onLowHP (attacker): equipment grants atk buff while bloodied.
+        if (f.kind === "hero") {
+          const m = activeLowHpMul(f, "atk");
+          if (m !== 1) dmg = Math.round(dmg * m);
+        }
+        // damageVs: equipment-flavored anti-faction / anti-trait riders. The
+        // hero's effects scan the target and add a flat percent. Multiple
+        // effects stack multiplicatively (a banner that hates Ash *and*
+        // anything draining will fire both clauses).
+        if (f.kind === "hero" && f.damageVsEffects && f.damageVsEffects.length) {
+          const tt = target.traits || [];
+          for (const eff of f.damageVsEffects) {
+            if (eff.target === target.fac || tt.includes(eff.target)) {
+              dmg = Math.round(dmg * (1 + (eff.value || 0)));
+            }
+          }
+        }
         target.hp -= dmg;
         bs.floats.push({
           id: Math.random().toString(36).slice(2),
           x: target.x, lane: target.lane, side: target.side,
-          text: `-${dmg}`, t: 0,
+          text: `-${dmg}`, kind: isCrit ? "crit" : "hit", t: 0,
         });
         f.atkCd = CONST.BATTLE.ATTACK_COOLDOWN;
-        tickEvents.push({ kind: "hit", from: f.uid, to: target.uid, dmg });
+        tickEvents.push({ kind: "hit", from: f.uid, to: target.uid, dmg, isCrit });
+        // drain: attacker trait. Heal for 30% of post-mitigation damage —
+        // intentionally reads `dmg` after shield/bulwark/holy/pike etc. so a
+        // Vampire Thrall pierced by a Knight's plate heals less, not the same.
+        // perk_bloodtithe: drain heal multiplier ×1.5.
+        if ((f.traits || []).includes("drain")) {
+          const drainPct = heroHasPerk(bs, f.side, "perk_bloodtithe") ? 0.45 : 0.3;
+          const heal = Math.max(1, Math.round(dmg * drainPct));
+          f.hp = Math.min(f.maxHp, f.hp + heal);
+          bs.floats.push({
+            id: Math.random().toString(36).slice(2),
+            x: f.x, lane: f.lane, side: f.side,
+            text: `+${heal}`, kind: "drain", t: 0,
+          });
+        }
+        // aoe: attacker trait. Splash 35% damage to up to two other enemies
+        // in the same lane within 4 of the primary target. Splash hits do
+        // NOT propagate (no recursive aoe) and ignore most modifiers — a
+        // simple flat splash on top of the main hit.
+        // perk_stormcaller: splash radius and damage scaled up.
+        if ((f.traits || []).includes("aoe")) {
+          const stormcaller = heroHasPerk(bs, f.side, "perk_stormcaller");
+          const splashRadius = stormcaller ? 6 : 4;
+          const splashPct = stormcaller ? 0.45 : 0.35;
+          const splashDmg = Math.max(1, Math.round(dmg * splashPct));
+          const splashTargets = bs.fighters
+            .filter((o) =>
+              o.alive && o.side !== f.side && o.uid !== target.uid
+              && o.lane === target.lane && Math.abs(o.x - target.x) < splashRadius
+            )
+            .slice(0, 2);
+          if (splashTargets.length > 0) {
+            tickEvents.push({
+              kind: "aoe", at: { x: target.x, lane: target.lane, side: target.side },
+              from: f.uid, to: target.uid,
+            });
+          }
+          for (const o of splashTargets) {
+            o.hp -= splashDmg;
+            bs.floats.push({
+              id: Math.random().toString(36).slice(2),
+              x: o.x, lane: o.lane, side: o.side,
+              text: `-${splashDmg}`, kind: "splash", t: 0,
+            });
+            tickEvents.push({ kind: "hit", from: f.uid, to: o.uid, dmg: splashDmg, isSplash: true });
+            if (o.hp <= 0) {
+              o.alive = false;
+              tickEvents.push({ kind: "die", uid: o.uid });
+              if ((o.traits || []).includes("undying") && !o.didRevive) {
+                o.didRevive = true;
+                o.alive = true;
+                o.hp = Math.round(o.maxHp * 0.5);
+                tickEvents.push({ kind: "revive", uid: o.uid });
+              }
+            }
+          }
+        }
         // perk_decap: crits restore 5 MP to the attacker's side hero
         if (isCrit && heroHasPerk(bs, f.side, "perk_decap")) {
           const sideHero = bs.fighters.find((h) => h.kind === "hero" && h.side === f.side && h.alive);
           if (sideHero) sideHero.mp = Math.min(sideHero.maxMp, sideHero.mp + 5);
+        }
+        // onCrit: hero-only equipment trigger (mp / heal / gold). Splash and
+        // cleave hits don't carry isCrit, so this naturally fires once per
+        // critical primary swing.
+        if (isCrit && f.kind === "hero" && f.onCritEffects && f.onCritEffects.length) {
+          applyEffectActions(f.onCritEffects, f, bs);
+        }
+        // perk_whirlwind: capstone — hero melee swings cleave to other
+        // adjacent foes for half the original damage. Skips the primary
+        // target; non-recursive like aoe; counted as `splash` for vfx.
+        if (f.kind === "hero" && f.range === 1 && heroHasPerk(bs, f.side, "perk_whirlwind")) {
+          const cleaveDmg = Math.max(1, Math.round(dmg * 0.5));
+          const cleaveTargets = bs.fighters.filter((o) =>
+            o.alive && o.side !== f.side && o.uid !== target.uid
+            && o.lane === target.lane && Math.abs(o.x - target.x) < 3
+          );
+          for (const o of cleaveTargets) {
+            o.hp -= cleaveDmg;
+            bs.floats.push({
+              id: Math.random().toString(36).slice(2),
+              x: o.x, lane: o.lane, side: o.side,
+              text: `-${cleaveDmg}`, kind: "splash", t: 0,
+            });
+            tickEvents.push({ kind: "hit", from: f.uid, to: o.uid, dmg: cleaveDmg, isSplash: true });
+            if (o.hp <= 0) {
+              o.alive = false;
+              tickEvents.push({ kind: "die", uid: o.uid });
+            }
+          }
         }
         // perk_thornarmor: reflect 20% melee damage back to attacker
         if (f.range === 1 && heroHasPerk(bs, target.side, "perk_thornarmor") && f.alive) {
@@ -227,7 +550,7 @@ export const Battle = {
             bs.floats.push({
               id: Math.random().toString(36).slice(2),
               x: f.x, lane: f.lane, side: f.side,
-              text: `-${reflect}`, t: 0,
+              text: `-${reflect}`, kind: "hit", t: 0,
             });
             tickEvents.push({ kind: "hit", from: target.uid, to: f.uid, dmg: reflect });
             if (f.hp <= 0) {
@@ -239,7 +562,22 @@ export const Battle = {
         if (target.hp <= 0) {
           target.alive = false;
           tickEvents.push({ kind: "die", uid: target.uid });
+          // onKill: hero-only equipment trigger fires on the swing that fells
+          // the foe. Fires before any revive so the player sees the payout
+          // even if the body claws back up.
+          if (f.kind === "hero" && f.onKillEffects && f.onKillEffects.length) {
+            applyEffectActions(f.onKillEffects, f, bs);
+          }
           if (target.traits?.includes("undying") && !target.didRevive) {
+            target.didRevive = true;
+            target.alive = true;
+            target.hp = Math.round(target.maxHp * 0.5);
+            tickEvents.push({ kind: "revive", uid: target.uid });
+          }
+          // perk_ancientpact: capstone — hero rises once at half HP. Same
+          // single-revive contract as undying so it can't loop forever.
+          if (target.kind === "hero" && !target.didRevive
+              && (target.perks || []).includes("perk_ancientpact")) {
             target.didRevive = true;
             target.alive = true;
             target.hp = Math.round(target.maxHp * 0.5);
@@ -268,9 +606,17 @@ export const Battle = {
     if (!ab) return bs;
     let cost = ab.cost;
     if (hero.perks.includes("perk_tactician")) cost = Math.round(cost * 0.8);
+    // perk_untold: capstone — the first ability cast each battle costs 0 MP.
+    // Tracked via `untoldUsed` flag on the hero, set after the first cast.
+    if (hero.perks.includes("perk_untold") && !hero.untoldUsed) {
+      cost = 0;
+    }
     if (hero.mp < cost) return bs;
     if ((hero.cooldowns[abilityId] || 0) > 0) return bs;
     hero.mp -= cost;
+    if (hero.perks.includes("perk_untold") && !hero.untoldUsed) {
+      hero.untoldUsed = true;
+    }
     hero.cooldowns[abilityId] = ab.cd;
 
     const enemies = bs.fighters.filter((f) => f.alive && f.side !== side);
@@ -295,7 +641,7 @@ export const Battle = {
         for (const t of targets) {
           t.hp -= dmg;
           if (t.hp <= 0) t.alive = false;
-          bs.floats.push({ id: Math.random().toString(36).slice(2), x: t.x, lane: t.lane, side: t.side, text: `-${dmg}`, t: 0 });
+          bs.floats.push({ id: Math.random().toString(36).slice(2), x: t.x, lane: t.lane, side: t.side, text: `-${dmg}`, kind: "splash", t: 0 });
         }
         break;
       }
@@ -322,7 +668,7 @@ export const Battle = {
           if (Math.abs(e.x - hero.x) < 20 && e.lane === hero.lane) {
             e.hp -= dmg;
             if (e.hp <= 0) e.alive = false;
-            bs.floats.push({ id: Math.random().toString(36).slice(2), x: e.x, lane: e.lane, side: e.side, text: `-${dmg}`, t: 0 });
+            bs.floats.push({ id: Math.random().toString(36).slice(2), x: e.x, lane: e.lane, side: e.side, text: `-${dmg}`, kind: "splash", t: 0 });
           }
         }
         break;
@@ -384,6 +730,10 @@ export const Battle = {
       attackerLosses, defenderLosses,
       xp: Math.round(xp),
       duration: bs.time,
+      // Equipment payout (onCrit/onKill type:"gold") for each side. RESOLVE_BATTLE
+      // adds attackerBonusGold to the attacker's purse on victory or defeat.
+      attackerBonusGold: bs.heroBonusGold?.L || 0,
+      defenderBonusGold: bs.heroBonusGold?.R || 0,
     };
   },
 };

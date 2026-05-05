@@ -66,7 +66,15 @@ export const AI = {
     const aiFactions = FACTION_LIST.filter((f) => !players[f]?.isHuman && !players[f]?.defeated);
     const candidates = [];
     for (const ai of aiFactions) {
-      if (Math.random() >= ATTACK_CHANCE) continue;
+      // perk_diplomat: any human defender with this capstone halves the
+      // raid chance against ALL their borders this round. Picks the lowest
+      // multiplier across human players to keep the math simple.
+      let chanceMul = 1;
+      for (const f of FACTION_LIST) {
+        if (!players[f]?.isHuman || players[f].defeated) continue;
+        if (players[f].hero?.perks?.includes("perk_diplomat")) chanceMul = Math.min(chanceMul, 0.5);
+      }
+      if (Math.random() >= ATTACK_CHANCE * chanceMul) continue;
       // Find a human-owned tile adjacent to any tile this AI owns,
       // where the human player has at least one retinue unit.
       const aiOwned = tiles.filter((t) => t.owner === ai);

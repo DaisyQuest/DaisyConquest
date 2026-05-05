@@ -4,8 +4,16 @@
    - "battle": just a portrait swatch sized for the battle screen
    Optional `level` prop renders a small chip when > 1, used by retinue
    displays to show veteran stacks. */
-import { UNITS } from "../data/units.js";
+import { UNITS, TRAIT_INFO } from "../data/units.js";
 import { FACTIONS } from "../data/factions.js";
+
+function traitTooltip(t) {
+  const info = TRAIT_INFO[t];
+  return info ? `${info.label}: ${info.desc}` : t;
+}
+function traitLabel(t) {
+  return TRAIT_INFO[t]?.label || t;
+}
 
 export function UnitCard({ unitId, count, level, variant = "compact", onClick, selected, dim }) {
   const u = UNITS[unitId];
@@ -55,7 +63,16 @@ export function UnitCard({ unitId, count, level, variant = "compact", onClick, s
         <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 6, fontStyle: "italic" }}>{u.desc}</div>
         {u.traits.length > 0 && (
           <div className="row gap-1" style={{ marginTop: 6, flexWrap: "wrap" }}>
-            {u.traits.map((t) => <span key={t} className="pill" style={{ fontSize: 10 }}>{t}</span>)}
+            {u.traits.map((t) => (
+              <span
+                key={t}
+                className="pill"
+                style={{ fontSize: 10, cursor: "help" }}
+                title={traitTooltip(t)}
+              >
+                {traitLabel(t)}
+              </span>
+            ))}
           </div>
         )}
       </div>

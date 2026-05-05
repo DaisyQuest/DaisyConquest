@@ -80,12 +80,12 @@ describe("per-player state isolation", () => {
     expect(after.players.crown.gold).toBeLessThan(s.players.crown.gold);
   });
 
-  it("BUY_ITEM only changes active player's equipment", () => {
+  it("BUY_ITEM only changes active player's inventory", () => {
     const s = newCoopGame();
     const partnerBefore = s.players.thorn;
     const after = gameReducer(s, { type: "BUY_ITEM", faction: "crown", itemId: "longsword" });
     expect(after.players.thorn).toBe(partnerBefore);
-    expect(after.players.crown.hero.equipment.weapon).toBe("longsword");
+    expect(after.players.crown.hero.inventory).toContain("longsword");
   });
 
   it("TAKE_PERK leaves the partner's perks untouched", () => {

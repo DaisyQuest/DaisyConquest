@@ -53,25 +53,25 @@ export function EncounterScreen() {
 
   return (
     <div className="parchment full" style={{
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
     }}>
-      <div className="panel pop-in" style={{ maxWidth: 600, width: "100%" }}>
-        <div className="row gap-3 center" style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 48 }}>{enc.icon}</div>
-          <div className="h-display" style={{ fontSize: 22 }}>{enc.title}</div>
+      <div className="panel pop-in" style={{ maxWidth: 560, width: "100%", padding: 14 }}>
+        <div className="row gap-2 center" style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 36 }}>{enc.icon}</div>
+          <div className="h-display" style={{ fontSize: 18 }}>{enc.title}</div>
         </div>
         <div style={{
-          fontSize: 14, color: "var(--ink)", marginBottom: 16,
-          fontStyle: "italic", lineHeight: 1.6,
+          fontSize: 13, color: "var(--ink)", marginBottom: 10,
+          fontStyle: "italic", lineHeight: 1.5,
         }}>{enc.prompt}</div>
 
         {!chosen && (
-          <div className="col gap-2">
+          <div className="col gap-1">
             {enc.choices.map((c, i) => (
               <button
                 key={i}
                 className="btn"
-                style={{ justifyContent: "flex-start", padding: "12px 16px" }}
+                style={{ justifyContent: "flex-start", padding: "8px 12px" }}
                 onClick={() => choose(c)}
               >{c.label}</button>
             ))}
@@ -79,10 +79,10 @@ export function EncounterScreen() {
         )}
 
         {chosen && resolved && (
-          <div className="col gap-3">
-            <div className="panel slide-up" style={{ background: "var(--bg-1)" }}>
+          <div className="col gap-2">
+            <div className="panel slide-up" style={{ background: "var(--bg-1)", padding: 10 }}>
               <div style={{ fontSize: 13 }}>{resolved.log}</div>
-              <div className="row gap-2" style={{ marginTop: 8, flexWrap: "wrap" }}>
+              <div className="row gap-1" style={{ marginTop: 6, flexWrap: "wrap" }}>
                 {resolved.gold ? (
                   <span className="pill" style={{ color: resolved.gold > 0 ? "var(--green-dk)" : "var(--blood)" }}>
                     {resolved.gold > 0 ? "+" : ""}{resolved.gold}g

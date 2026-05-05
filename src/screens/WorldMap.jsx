@@ -9,6 +9,7 @@ import { HexTile } from "../components/HexTile.jsx";
 import { HeroPanel } from "../components/HeroPanel.jsx";
 import { UnitCard } from "../components/UnitCard.jsx";
 import { Crest } from "../components/Crest.jsx";
+import { TutorialOverlay } from "../components/TutorialOverlay.jsx";
 
 export function WorldMap() {
   const { state, dispatch } = useStore();
@@ -29,6 +30,29 @@ export function WorldMap() {
     }
     return set;
   }, [ownedTiles, tiles]);
+
+  // Resolve each tile's relationship to the active player so HexTile can
+  // pick the right border/glow without re-running comparisons per render.
+  // "mine"  = active human (gold solid border, strong tint)
+  // "ally"  = the coop partner (gold-dashed border, medium tint)
+  // "enemy" = any non-human owner with a known faction
+  // "none"  = unclaimed
+  const ownerKindByTile = useMemo(() => {
+    const map = new Map();
+    for (const t of tiles) {
+      if (!t.owner) {
+        map.set(t.id, "none");
+      } else if (t.owner === me) {
+        map.set(t.id, "mine");
+      } else if (state.coopFaction && t.owner === state.coopFaction
+                 && state.players[state.coopFaction]?.isHuman) {
+        map.set(t.id, "ally");
+      } else {
+        map.set(t.id, "enemy");
+      }
+    }
+    return map;
+  }, [tiles, me, state.coopFaction, state.players]);
 
   /* Visible = currently in sight: owned by human(s) + their neighbors.
      Computed per-render (cheap, deterministic from owners + neighbors). */
@@ -77,8 +101,39 @@ export function WorldMap() {
 
   const swapControl = () => dispatch({ type: "SWAP_CONTROL", next: "map" });
 
+  // Tutorial steps for the world map. Targets are stable data-tut anchors
+  // (set in GoldBar.jsx and HexTile.jsx) so future copy edits can't break
+  // the selectors. Each step is self-contained and dismissable.
+  const tutorialSteps = [
+    {
+      selector: "[data-tut='topbar-identity']",
+      side: "bottom",
+      title: "Your banner",
+      body: "Whose turn it is. In coop, this swaps each handoff so the player knows who's commanding the round.",
+    },
+    {
+      selector: "[data-tut='topbar-nav']",
+      side: "bottom",
+      title: "Navigation",
+      body: "Jump to Map, Recruit, Hero, Shop, or Defense. Recruit and Shop need a town context — enter a region first to enable them.",
+    },
+    {
+      selector: ".hex.hex-big:not(.fogged)",
+      side: "right",
+      title: "The hex map",
+      body: "Solid gold rim = yours. Dashed gold = coop ally. Click a hex to inspect it; click an adjacent enemy or unowned hex to attack or claim.",
+    },
+    {
+      selector: "[data-tut='end-turn']",
+      side: "bottom",
+      title: "End the round",
+      body: "When you're done moving and recruiting, end the round. Income, upkeep, AI moves, and any pending defense raids resolve in order.",
+    },
+  ];
+
   return (
     <div className="parchment" style={{ width: "100%", height: "100%", display: "flex", overflow: "hidden" }}>
+      <TutorialOverlay stepId="map.intro" steps={tutorialSteps} />
       <div style={{ flex: 1, position: "relative", overflow: "auto", padding: 24 }}>
         <div style={{ position: "relative", width: mapW, height: mapH, margin: "auto" }}>
           {tiles.map((t) => (
@@ -90,6 +145,7 @@ export function WorldMap() {
               isAdjacentToActive={adjacencyIds.has(t.id) && t.owner !== me}
               visible={visibleIds.has(t.id)}
               justRevealed={justRevealedIds.has(t.id)}
+              ownerKind={ownerKindByTile.get(t.id)}
               onClick={onTileClick}
               onHover={setHovered}
             />
@@ -98,17 +154,18 @@ export function WorldMap() {
       </div>
 
       <div style={{
-        width: 320, borderLeft: "3px solid var(--line)",
-        background: "var(--bg-2)", padding: 16, overflowY: "auto",
+        width: 300, borderLeft: "3px solid var(--line)",
+        background: "var(--bg-2)", padding: 10, overflowY: "auto",
+        display: "flex", flexDirection: "column", gap: 8,
       }}>
         <HeroPanel player={myPlayer} />
         {state.coopFaction && (
-          <div style={{ marginTop: 12 }}>
-            <div className="panel-title">Co-op Ally</div>
+          <div className="col gap-1">
+            <div className="panel-title" style={{ marginBottom: 4 }}>Co-op Ally</div>
             <HeroPanel player={state.players[state.coopFaction]} compact />
             <button
               className="btn btn-ghost full"
-              style={{ marginTop: 8, width: "100%", justifyContent: "center" }}
+              style={{ width: "100%", justifyContent: "center", padding: "4px 8px", fontSize: 11 }}
               onClick={swapControl}
             >
               ↔ Swap Control
@@ -116,8 +173,8 @@ export function WorldMap() {
           </div>
         )}
 
-        <div style={{ marginTop: 12 }} className="panel">
-          <div className="panel-title">Selected Region</div>
+        <div className="panel" style={{ padding: 10 }}>
+          <div className="panel-title" style={{ marginBottom: 4 }}>Selected Region</div>
           {!selected && <div style={{ color: "var(--ink-soft)", fontSize: 12 }}>Click a hex to inspect.</div>}
           {selected && (
             <SelectedTilePanel
@@ -131,9 +188,9 @@ export function WorldMap() {
           )}
         </div>
 
-        <div style={{ marginTop: 12 }} className="panel">
-          <div className="panel-title">Chronicle</div>
-          <div className="col gap-1" style={{ fontSize: 11, maxHeight: 160, overflowY: "auto" }}>
+        <div className="panel" style={{ padding: 10 }}>
+          <div className="panel-title" style={{ marginBottom: 4 }}>Chronicle</div>
+          <div className="col" style={{ fontSize: 11, maxHeight: 130, overflowY: "auto", lineHeight: 1.4 }}>
             {state.log.slice(-8).reverse().map((l, i) => (
               <div key={i}><b>R{l.round}</b> · {l.text}</div>
             ))}
@@ -142,7 +199,7 @@ export function WorldMap() {
 
         <button
           className="btn btn-ghost"
-          style={{ width: "100%", marginTop: 12, justifyContent: "center" }}
+          style={{ width: "100%", justifyContent: "center", padding: "4px 8px", fontSize: 11 }}
           onClick={() => dispatch({ type: "SET_SCREEN", screen: "main" })}
         >
           ← Title Screen

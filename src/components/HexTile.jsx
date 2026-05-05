@@ -5,7 +5,11 @@
    Visibility states:
    - !explored        → fogged silhouette (no terrain hint, no town, no owner)
    - explored && !visible → dim terrain, no live garrison/owner overlay
-   - visible              → full render */
+   - visible              → full render
+
+   ownerKind ("mine" | "ally" | "enemy" | "none") drives border/tint so the
+   active player can see at-a-glance which territories are theirs vs the
+   coop partner's vs an enemy's. Computed in WorldMap and passed through. */
 import { TERRAINS, TOWN_TYPES } from "../data/map.js";
 import { FACTIONS } from "../data/factions.js";
 
@@ -16,6 +20,7 @@ export function HexTile({
   isAdjacentToActive,
   visible = true,
   justRevealed = false,
+  ownerKind,
   onClick,
   onHover,
 }) {
@@ -31,6 +36,13 @@ export function HexTile({
 
   const fillBase = fogged ? "#3a2e22" : terr.color;
   const ownerOverlay = fac ? fac.palette.primary : null;
+  // Stronger faction tint on owned-by-me tiles so the player's territory
+  // pops; ally a touch quieter; enemies subdued so they read as foreign
+  // without disappearing.
+  const ownerOpacity =
+    ownerKind === "mine"  ? 0.55 :
+    ownerKind === "ally"  ? 0.42 :
+    ownerKind === "enemy" ? 0.28 : 0.32;
   const gradId = `tg_${tile.id}`;
 
   const activate = () => !terr.impassable && onClick && onClick(tile);
@@ -40,11 +52,15 @@ export function HexTile({
       activate();
     }
   };
+  const ownerWord =
+    ownerKind === "mine"  ? "yours" :
+    ownerKind === "ally"  ? "ally" :
+    ownerKind === "enemy" ? "rival" : "unclaimed";
   const ariaLabel = fogged
     ? "uncharted territory"
     : [
         town?.name || terr.name,
-        fac ? fac.short : tile.owner && visible ? "" : "unclaimed",
+        fac ? `${fac.short} (${ownerWord})` : "unclaimed",
         garrisonCount ? `garrison ${garrisonCount}` : "",
       ].filter(Boolean).join(", ");
 
@@ -88,8 +104,26 @@ export function HexTile({
         {ownerOverlay && (
           <polygon
             points="60,3 114,34 114,104 60,135 6,104 6,34"
-            fill={ownerOverlay} fillOpacity="0.32"
+            fill={ownerOverlay} fillOpacity={ownerOpacity}
             stroke={ownerOverlay} strokeWidth="4" strokeLinejoin="round"
+          />
+        )}
+        {/* Mine: thick gold rim — the headline cue for "this is yours". */}
+        {ownerKind === "mine" && !selected && (
+          <polygon
+            points="60,3 114,34 114,104 60,135 6,104 6,34"
+            fill="none" stroke="var(--gold)" strokeWidth="5"
+            strokeLinejoin="round"
+            style={{ filter: "drop-shadow(0 0 3px rgba(212,175,55,0.55))" }}
+          />
+        )}
+        {/* Ally: dashed gold rim — same family of cue, but distinct from mine. */}
+        {ownerKind === "ally" && !selected && (
+          <polygon
+            points="60,3 114,34 114,104 60,135 6,104 6,34"
+            fill="none" stroke="var(--gold)" strokeWidth="3"
+            strokeDasharray="8 5" strokeLinejoin="round"
+            opacity="0.85"
           />
         )}
         {isAdjacentToActive && !selected && (
@@ -97,6 +131,7 @@ export function HexTile({
             points="60,3 114,34 114,104 60,135 6,104 6,34"
             fill="none" stroke="var(--gold)" strokeWidth="4"
             strokeDasharray="6 4" strokeLinejoin="round"
+            opacity="0.7"
           />
         )}
         {hovered && !selected && (

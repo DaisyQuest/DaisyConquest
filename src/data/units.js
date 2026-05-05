@@ -4,8 +4,45 @@
    role:    "vanguard" | "skirmisher" | "support" | "siege"
    range:   1 (melee) | 2-4+ (ranged)
    traits:  optional array of keywords interpreted by the battle sim.
-            Many are pure flavor labels until the sim wires them; they
-            still surface as tooltip pills on UnitCard. */
+            Combat-active traits (read by src/systems/battle.js):
+              crit    — 20% chance, ×1.6 damage
+              frenzy  — +up to 40% damage as the unit takes damage
+              undying — revives once at half HP
+              shield  — −25% damage taken from melee
+              bulwark — +50% effective defense
+              pierce  — halves target's effective defense
+              holy    — +30% vs Ash faction or undying/drain targets
+              pike    — +50% vs vanguard / charge units
+              siege   — +25% vs targets with maxHp ≥ 50
+              heal    — channels into healing wounded same-lane allies
+              drain   — heals attacker for 30% of damage dealt
+              aoe     — splash 35% damage to up to 2 nearby enemies in lane
+              rally   — same-lane allies gain +10% damage (passive aura)
+            Flavor-only (no battle effect yet):
+              charge, scout, pull, slow, root, phase, forage */
+export const TRAIT_INFO = {
+  crit:    { label: "Critical",  desc: "20% chance to land for 1.6× damage." },
+  frenzy:  { label: "Frenzy",    desc: "Damage rises as the unit's HP falls (up to +40%)." },
+  undying: { label: "Undying",   desc: "Revives once at half HP." },
+  shield:  { label: "Shield",    desc: "−25% damage from melee strikes." },
+  bulwark: { label: "Bulwark",   desc: "+50% effective defense." },
+  pierce:  { label: "Pierce",    desc: "Halves target's effective defense." },
+  holy:    { label: "Holy",      desc: "+30% damage vs Ash, undying, and drain targets." },
+  pike:    { label: "Pike",      desc: "+50% damage vs vanguard and charge units." },
+  siege:   { label: "Siege",     desc: "+25% damage vs heavy targets (HP ≥ 50)." },
+  heal:    { label: "Heal",      desc: "Mends wounded same-lane allies in range of attack." },
+  drain:   { label: "Drain",     desc: "Heals attacker for 30% of damage dealt." },
+  aoe:     { label: "Splash",    desc: "Hits up to 2 extra enemies near the primary target." },
+  rally:   { label: "Rally",     desc: "Same-lane allies deal +10% damage (passive)." },
+  charge:  { label: "Charge",    desc: "Mounted; receives lance bonuses where applicable." },
+  scout:   { label: "Scout",     desc: "Light scout — flavor only for now." },
+  pull:    { label: "Pull",      desc: "Yanks targets — flavor only for now." },
+  slow:    { label: "Slow",      desc: "Slows foes — flavor only for now." },
+  root:    { label: "Root",      desc: "Roots foes — flavor only for now." },
+  phase:   { label: "Phase",     desc: "Phases through ranks — flavor only for now." },
+  forage:  { label: "Forage",    desc: "Provisions trickle — flavor only for now." },
+};
+
 
 export const UNITS = {
   /* ╔═══════════════════════ Iron Crown ═══════════════════════╗

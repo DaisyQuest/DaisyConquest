@@ -168,16 +168,20 @@ describe("RECRUIT", () => {
 });
 
 describe("BUY_ITEM", () => {
-  it("weapon goes into equipment.weapon slot", () => {
+  it("weapon lands in inventory, not equipped slot", () => {
     const startGold = state.players.crown.gold;
+    const startWeapon = state.players.crown.hero.equipment.weapon;
     const s = gameReducer(state, { type: "BUY_ITEM", faction: "crown", itemId: "longsword" });
     expect(s.players.crown.gold).toBe(startGold - ITEMS.longsword.cost);
-    expect(s.players.crown.hero.equipment.weapon).toBe("longsword");
+    expect(s.players.crown.hero.equipment.weapon).toBe(startWeapon);
+    expect(s.players.crown.hero.inventory).toContain("longsword");
   });
 
-  it("armor goes into equipment.armor slot", () => {
+  it("armor lands in inventory, not equipped slot", () => {
+    const startArmor = state.players.crown.hero.equipment.armor;
     const s = gameReducer(state, { type: "BUY_ITEM", faction: "crown", itemId: "mail" });
-    expect(s.players.crown.hero.equipment.armor).toBe("mail");
+    expect(s.players.crown.hero.equipment.armor).toBe(startArmor);
+    expect(s.players.crown.hero.inventory).toContain("mail");
   });
 
   it("consumable is appended to consumables list", () => {
@@ -209,6 +213,76 @@ describe("EQUIP", () => {
       itemId: "warhammer",
     });
     expect(s.players.crown.hero.equipment.weapon).toBe("warhammer");
+  });
+});
+
+describe("EQUIP_FROM_INVENTORY", () => {
+  it("swaps the slot's item back into inventory", () => {
+    // Buy → inventory holds longsword. Original equipment.weapon is rustyBlade.
+    let s = gameReducer(state, { type: "BUY_ITEM", faction: "crown", itemId: "longsword" });
+    expect(s.players.crown.hero.inventory).toContain("longsword");
+    s = gameReducer(s, { type: "EQUIP_FROM_INVENTORY", faction: "crown", itemId: "longsword" });
+    expect(s.players.crown.hero.equipment.weapon).toBe("longsword");
+    expect(s.players.crown.hero.inventory).toContain("rustyBlade");
+    expect(s.players.crown.hero.inventory).not.toContain("longsword");
+  });
+
+  it("refuses if item is not in inventory", () => {
+    const s = gameReducer(state, {
+      type: "EQUIP_FROM_INVENTORY", faction: "crown", itemId: "longsword",
+    });
+    expect(s).toBe(state);
+  });
+
+  it("refuses consumables (slot mismatch)", () => {
+    const seeded = {
+      ...state,
+      players: {
+        ...state.players,
+        crown: {
+          ...state.players.crown,
+          hero: { ...state.players.crown.hero, inventory: ["potionHeal"] },
+        },
+      },
+    };
+    const s = gameReducer(seeded, {
+      type: "EQUIP_FROM_INVENTORY", faction: "crown", itemId: "potionHeal",
+    });
+    expect(s).toBe(seeded);
+  });
+});
+
+describe("UNEQUIP_TO_INVENTORY", () => {
+  it("pulls equipment back into inventory and clears the slot", () => {
+    const s = gameReducer(state, {
+      type: "UNEQUIP_TO_INVENTORY", faction: "crown", slot: "weapon",
+    });
+    expect(s.players.crown.hero.equipment.weapon).toBe(null);
+    expect(s.players.crown.hero.inventory).toContain("rustyBlade");
+  });
+
+  it("no-ops on an empty slot", () => {
+    const s = gameReducer(state, {
+      type: "UNEQUIP_TO_INVENTORY", faction: "crown", slot: "trinket",
+    });
+    expect(s).toBe(state);
+  });
+});
+
+describe("SELL_ITEM", () => {
+  it("removes item from inventory and refunds 50% of cost", () => {
+    let s = gameReducer(state, { type: "BUY_ITEM", faction: "crown", itemId: "longsword" });
+    const goldAfterBuy = s.players.crown.gold;
+    s = gameReducer(s, { type: "SELL_ITEM", faction: "crown", itemId: "longsword" });
+    expect(s.players.crown.hero.inventory).not.toContain("longsword");
+    expect(s.players.crown.gold).toBe(goldAfterBuy + Math.floor(ITEMS.longsword.cost * 0.5));
+  });
+
+  it("refuses items that aren't in inventory", () => {
+    const s = gameReducer(state, {
+      type: "SELL_ITEM", faction: "crown", itemId: "longsword",
+    });
+    expect(s).toBe(state);
   });
 });
 
@@ -355,5 +429,90 @@ describe("DISMISS_SUMMARY", () => {
     const s = gameReducer(dirty, { type: "DISMISS_SUMMARY" });
     expect(s.screen).toBe("map");
     expect(s.pendingSummary).toBeNull();
+  });
+});
+
+describe("SET_HERO_BEHAVIOR", () => {
+  it("sets each known key to a valid value", () => {
+    let s = gameReducer(state, { type: "SET_HERO_BEHAVIOR", faction: "crown", key: "stance", value: "aggressive" });
+    expect(s.players.crown.hero.behavior.stance).toBe("aggressive");
+    s = gameReducer(s, { type: "SET_HERO_BEHAVIOR", faction: "crown", key: "targeting", value: "wounded" });
+    expect(s.players.crown.hero.behavior.targeting).toBe("wounded");
+    s = gameReducer(s, { type: "SET_HERO_BEHAVIOR", faction: "crown", key: "autoCast", value: true });
+    expect(s.players.crown.hero.behavior.autoCast).toBe(true);
+  });
+
+  it("rejects unknown keys, bad enum values, and wrong types", () => {
+    const before = state;
+    expect(gameReducer(before, { type: "SET_HERO_BEHAVIOR", faction: "crown", key: "nope", value: "x" })).toBe(before);
+    expect(gameReducer(before, { type: "SET_HERO_BEHAVIOR", faction: "crown", key: "stance", value: "wild" })).toBe(before);
+    expect(gameReducer(before, { type: "SET_HERO_BEHAVIOR", faction: "crown", key: "autoCast", value: "yes" })).toBe(before);
+  });
+});
+
+describe("SET_STACK_LANE", () => {
+  it("sets a lane on the chosen retinue stack", () => {
+    const seeded = {
+      ...state,
+      players: {
+        ...state.players,
+        crown: {
+          ...state.players.crown,
+          hero: {
+            ...state.players.crown.hero,
+            retinue: [{ unit: "levy", count: 4, lvl: 1, xp: 0 }],
+          },
+        },
+      },
+    };
+    const after = gameReducer(seeded, {
+      type: "SET_STACK_LANE", faction: "crown", stackIndex: 0, lane: 2,
+    });
+    expect(after.players.crown.hero.retinue[0].lane).toBe(2);
+  });
+
+  it("clears the lane back to undefined when lane is null", () => {
+    const seeded = {
+      ...state,
+      players: {
+        ...state.players,
+        crown: {
+          ...state.players.crown,
+          hero: {
+            ...state.players.crown.hero,
+            retinue: [{ unit: "levy", count: 4, lvl: 1, xp: 0, lane: 1 }],
+          },
+        },
+      },
+    };
+    const after = gameReducer(seeded, {
+      type: "SET_STACK_LANE", faction: "crown", stackIndex: 0, lane: null,
+    });
+    expect(after.players.crown.hero.retinue[0].lane).toBeUndefined();
+  });
+
+  it("rejects invalid stack indices and lane values without crashing", () => {
+    const before = state;
+    const noStack = gameReducer(state, {
+      type: "SET_STACK_LANE", faction: "crown", stackIndex: 99, lane: 0,
+    });
+    expect(noStack).toBe(before);
+    const seeded = {
+      ...state,
+      players: {
+        ...state.players,
+        crown: {
+          ...state.players.crown,
+          hero: {
+            ...state.players.crown.hero,
+            retinue: [{ unit: "levy", count: 1, lvl: 1, xp: 0 }],
+          },
+        },
+      },
+    };
+    const badLane = gameReducer(seeded, {
+      type: "SET_STACK_LANE", faction: "crown", stackIndex: 0, lane: 7,
+    });
+    expect(badLane).toBe(seeded);
   });
 });

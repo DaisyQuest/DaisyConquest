@@ -54,29 +54,29 @@ export function Handoff() {
         alignItems: "center",
         justifyContent: "center",
         cursor: "pointer",
-        padding: 40,
+        padding: 24,
         background: `radial-gradient(ellipse at center, ${fac.palette.primary}30 0%, var(--bg-0) 80%)`,
       }}
     >
-      <div className="col center pop-in" style={{ gap: 24, textAlign: "center", maxWidth: 560 }}>
-        <Crest faction={target} size={140} ringed />
+      <div className="col center pop-in" style={{ gap: 14, textAlign: "center", maxWidth: 520 }}>
+        <Crest faction={target} size={104} ringed />
         <div>
           <div className="h-display" style={{
-            fontSize: 14,
+            fontSize: 12,
             color: "var(--ink-soft)",
             letterSpacing: "0.18em",
           }}>Pass control to</div>
           <div className="h-display" style={{
-            fontSize: 44,
+            fontSize: 32,
             color: fac.palette.primary,
             textShadow: "0 2px 0 rgba(0,0,0,0.25)",
-            marginTop: 4,
+            marginTop: 2,
           }}>{fac.name}</div>
-          <div style={{ fontSize: 13, color: "var(--ink-soft)", fontStyle: "italic", marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: "var(--ink-soft)", fontStyle: "italic", marginTop: 4 }}>
             &ldquo;{fac.motto}&rdquo;
           </div>
         </div>
-        <div style={{ fontSize: 12, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.16em" }}>
+        <div style={{ fontSize: 11, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.14em" }}>
           Click anywhere or press any key to continue
         </div>
       </div>

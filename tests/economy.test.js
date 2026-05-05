@@ -45,6 +45,27 @@ describe("Economy.computeIncome", () => {
     const base = CONST.ROUND_INCOME_BASE + 5 + 3;
     expect(Economy.computeIncome(state, "crown")).toBe(Math.floor(base * 1.25));
   });
+
+  it("adds equipment perRound gold (Merchant's Coffer)", () => {
+    const hero = {
+      perks: [],
+      retinue: [],
+      equipment: { weapon: null, armor: null, trinket: "coffer", mount: null },
+    };
+    const state = makeState({ tiles: [], hero });
+    expect(Economy.computeIncome(state, "crown")).toBe(CONST.ROUND_INCOME_BASE + 5);
+  });
+
+  it("equipment perRound is included before perk_treasury so the multiplier scales it", () => {
+    const hero = {
+      perks: ["perk_treasury"],
+      retinue: [],
+      equipment: { weapon: null, armor: null, trinket: "coffer", mount: null },
+    };
+    const state = makeState({ tiles: [], hero });
+    const base = CONST.ROUND_INCOME_BASE + 5;
+    expect(Economy.computeIncome(state, "crown")).toBe(Math.floor(base * 1.25));
+  });
 });
 
 describe("Economy.computeUpkeep", () => {

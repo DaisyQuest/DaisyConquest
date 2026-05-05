@@ -1,11 +1,15 @@
-/* Recruit — hire troops to a tile garrison or to the hero retinue. */
+/* Recruit — hire troops to a tile garrison or to the hero retinue.
+   Layout target: every unit row visible without scrolling on a 1280×720
+   viewport. We render a compact 2-column grid of 1-line unit rows rather
+   than the full UnitCard panels — name + stats + cost + counter all in
+   one strip; click the row for a tooltip with the lore. */
 import { useState } from "react";
 import { useStore } from "../core/store.jsx";
 import { Economy } from "../core/economy.js";
-import { unitsByFaction } from "../data/units.js";
-import { UnitCard } from "../components/UnitCard.jsx";
+import { TRAIT_INFO, unitsByFaction } from "../data/units.js";
 import { FACTIONS } from "../data/factions.js";
 import { TERRAINS, TOWN_TYPES } from "../data/map.js";
+import { TutorialOverlay } from "../components/TutorialOverlay.jsx";
 
 export function Recruit() {
   const { state, dispatch } = useStore();
@@ -60,80 +64,87 @@ export function Recruit() {
     setCounts({});
   };
 
+  const tutorialSteps = [
+    {
+      selector: ".panel button.btn-primary, .panel button.btn-ghost",
+      side: "bottom",
+      title: "Garrison vs Retinue",
+      body: "Garrison defends this town. Retinue marches with your hero. Pick a target — the same +/− buttons fill either pool.",
+    },
+    {
+      selector: ".panel:last-of-type button.btn-primary",
+      side: "top",
+      title: "Confirm the order",
+      body: "Activates when the total fits your gold and at least one unit is queued. Same-archetype recruits merge with existing stacks and keep their level.",
+    },
+  ];
+
   return (
-    <div className="parchment full" style={{ overflow: "auto", padding: 24 }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }} className="col gap-3">
-        <div className="row between center">
+    <div className="parchment full" style={{ overflow: "hidden", padding: 16, display: "flex", flexDirection: "column" }}>
+      <TutorialOverlay stepId="recruit.intro" steps={tutorialSteps} />
+      <div style={{ maxWidth: 1180, width: "100%", margin: "0 auto", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }} className="gap-2">
+        <div className="row between center" style={{ marginBottom: 8 }}>
           <button
             className="btn btn-ghost"
             onClick={() => dispatch({ type: "SET_SCREEN", screen: "zone", params: { tileId } })}
           >
             ← Back to Region
           </button>
-          <div className="h-display" style={{ fontSize: 22 }}>⚔ Mustering Field</div>
-          <div className="numeric h-display" style={{ fontSize: 18, color: "var(--gold-dk)" }}>
+          <div className="h-display" style={{ fontSize: 18 }}>⚔ Mustering Field</div>
+          <div className="numeric h-display" style={{ fontSize: 16, color: "var(--gold-dk)" }}>
             {myPlayer.gold} gold
           </div>
         </div>
 
-        <div className="panel">
+        <div className="panel" style={{ padding: "8px 12px", marginBottom: 8 }}>
           <div className="row between center">
             <div className="row gap-2">
               <button className={`btn ${target === "garrison" ? "btn-primary" : "btn-ghost"}`} onClick={() => setTarget("garrison")}>
-                🏰 Add to Garrison
+                🏰 Garrison
               </button>
               <button className={`btn ${target === "retinue" ? "btn-primary" : "btn-ghost"}`} onClick={() => setTarget("retinue")}>
-                👑 Add to Retinue
+                👑 Retinue
               </button>
             </div>
             <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>
               {target === "garrison"
-                ? "Garrison units defend this region."
-                : "Retinue marches with your hero."}
+                ? "Defends this region."
+                : "Marches with your hero."}
             </div>
           </div>
         </div>
 
-        <div className="row gap-3" style={{ flexWrap: "wrap" }}>
+        <div
+          style={{
+            flex: 1, minHeight: 0, overflowY: "auto",
+            display: "grid", gap: 6,
+            gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+            alignContent: "start",
+          }}
+        >
           {units.map((u) => {
             const locked = u.tier > Math.max(1, Math.ceil(heroLvl / 3));
             return (
-              <div
+              <RecruitRow
                 key={u.id}
-                className="panel"
-                style={{ flex: "1 1 280px", minWidth: 260, opacity: locked ? 0.5 : 1 }}
-              >
-                <UnitCard unitId={u.id} variant="full" />
-                <div className="row between center" style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 13 }}>
-                    <span className="numeric h-display" style={{ color: "var(--gold-dk)" }}>{u.cost}g</span>
-                    <span style={{ color: "var(--ink-soft)", fontSize: 11 }}> /unit · {u.upkeep}/r</span>
-                  </div>
-                  <div className="row gap-1 center">
-                    <button className="btn" disabled={locked || !counts[u.id]} onClick={() => inc(u.id, -1)}>−</button>
-                    <span className="numeric" style={{ minWidth: 24, textAlign: "center" }}>{counts[u.id] || 0}</span>
-                    <button className="btn" disabled={locked} onClick={() => inc(u.id, 1)}>+</button>
-                  </div>
-                </div>
-                {locked && (
-                  <div style={{ fontSize: 11, color: "var(--blood-dk)", marginTop: 6 }}>
-                    Requires hero L{(u.tier - 1) * 3 + 1}
-                  </div>
-                )}
-              </div>
+                unit={u}
+                count={counts[u.id] || 0}
+                locked={locked}
+                onInc={(n) => inc(u.id, n)}
+              />
             );
           })}
         </div>
 
-        <div className="panel" style={{ position: "sticky", bottom: 0, background: "var(--bg-2)" }}>
+        <div className="panel" style={{ marginTop: 8, padding: "8px 12px", background: "var(--bg-2)" }}>
           <div className="row between center">
-            <div className="col">
-              <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>Order Total</div>
+            <div className="row gap-3 center">
+              <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>Order</div>
               <div className="h-display numeric" style={{
-                fontSize: 20,
+                fontSize: 16,
                 color: canAfford ? "var(--ink)" : "var(--blood)",
               }}>
-                {totalCost}g · {totalUnits} units
+                {totalCost}g · {totalUnits} {totalUnits === 1 ? "unit" : "units"}
               </div>
             </div>
             <button className="btn btn-primary" disabled={!canAfford || totalUnits === 0} onClick={recruit}>
@@ -142,6 +153,84 @@ export function Recruit() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* One unit, one row. Portrait + name/T/role + stats + cost + counter, all
+   on a single line at typical screen widths. Trait pills tucked under the
+   stat strip when the unit has any. Locked rows dim and disable the +. */
+function RecruitRow({ unit, count, locked, onInc }) {
+  const u = unit;
+  const fac = FACTIONS[u.faction];
+  const lore = `${u.desc}${u.traits.length ? "\n\nTraits: " + u.traits.map((t) => TRAIT_INFO[t]?.label || t).join(", ") : ""}`;
+  return (
+    <div
+      className="panel"
+      title={lore}
+      style={{
+        padding: "6px 10px",
+        opacity: locked ? 0.55 : 1,
+        display: "flex", flexDirection: "column", gap: 4,
+      }}
+    >
+      <div className="row gap-2 center">
+        <div style={{
+          width: 30, height: 30, flexShrink: 0,
+          background: fac.palette.primary, color: "#fff",
+          borderRadius: 6, border: "2px solid var(--line)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 16,
+        }}>{u.icon}</div>
+        <div className="col flex1" style={{ lineHeight: 1.2, minWidth: 0 }}>
+          <div className="row gap-1 center" style={{ fontSize: 12 }}>
+            <span className="h-ui" style={{ fontWeight: 700 }}>{u.name}</span>
+            <span style={{ fontSize: 9, color: "var(--ink-faint)" }}>T{u.tier}·{u.role.slice(0, 4)}</span>
+          </div>
+          <div className="row gap-2" style={{ fontSize: 10, color: "var(--ink-soft)", fontFamily: "var(--font-mono)" }}>
+            <span>❤{u.hp}</span><span>⚔{u.atk}</span><span>🛡{u.def}</span><span>⚡{u.spd}</span>
+            {u.range > 1 && <span>🏹{u.range}</span>}
+          </div>
+        </div>
+        <div className="col" style={{ alignItems: "flex-end", lineHeight: 1.1, marginRight: 4 }}>
+          <span className="numeric" style={{ fontSize: 12, color: "var(--gold-dk)", fontWeight: 700 }}>{u.cost}g</span>
+          <span style={{ fontSize: 9, color: "var(--ink-soft)" }}>{u.upkeep}/r</span>
+        </div>
+        <div className="row gap-1 center">
+          <button
+            className="btn"
+            style={{ padding: "2px 8px", fontSize: 13 }}
+            disabled={locked || !count}
+            onClick={() => onInc(-1)}
+          >−</button>
+          <span className="numeric" style={{ minWidth: 18, textAlign: "center", fontSize: 12 }}>{count}</span>
+          <button
+            className="btn"
+            style={{ padding: "2px 8px", fontSize: 13 }}
+            disabled={locked}
+            onClick={() => onInc(1)}
+          >+</button>
+        </div>
+      </div>
+      {(locked || u.traits.length > 0) && (
+        <div className="row gap-1" style={{ flexWrap: "wrap", paddingLeft: 38 }}>
+          {locked && (
+            <span className="pill" style={{ fontSize: 9, color: "var(--blood-dk)" }}>
+              ⛔ Hero L{(u.tier - 1) * 3 + 1}
+            </span>
+          )}
+          {u.traits.map((t) => (
+            <span
+              key={t}
+              className="pill"
+              style={{ fontSize: 9 }}
+              title={TRAIT_INFO[t] ? `${TRAIT_INFO[t].label}: ${TRAIT_INFO[t].desc}` : t}
+            >
+              {TRAIT_INFO[t]?.label || t}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

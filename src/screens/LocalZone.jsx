@@ -6,6 +6,7 @@ import { FACTIONS } from "../data/factions.js";
 import { ENCOUNTERS } from "../data/encounters.js";
 import { Crest } from "../components/Crest.jsx";
 import { UnitCard } from "../components/UnitCard.jsx";
+import { TutorialOverlay } from "../components/TutorialOverlay.jsx";
 
 function flavorText(tile) {
   const town = TOWN_TYPES[tile.town];
@@ -68,34 +69,43 @@ export function LocalZone() {
     });
   }
 
+  const tutorialSteps = [
+    {
+      selector: "[data-tut='facilities']",
+      side: "top",
+      title: "Region facilities",
+      body: "Mustering Field hires troops. Market sells gear and consumables. Council manages your hero. Tavern Rumors fires a quick optional encounter. Defense Drills runs no-stakes wave practice.",
+    },
+  ];
+
   return (
-    <div className="parchment full" style={{ overflow: "auto", padding: 24 }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }} className="col gap-3">
+    <div className="parchment full" style={{ overflow: "auto", padding: 16 }}>
+      <TutorialOverlay stepId="zone.intro" steps={tutorialSteps} />
+      <div style={{ maxWidth: 1180, margin: "0 auto" }} className="col gap-2">
         <div className="row between center">
           <button className="btn btn-ghost" onClick={() => dispatch({ type: "SET_SCREEN", screen: "map" })}>
             ← World Map
           </button>
-          <div className="row gap-3 center">
-            {tile.owner && <Crest faction={tile.owner} size={32} />}
-            <div className="h-display" style={{ fontSize: 24 }}>{town.name || terr.name}</div>
+          <div className="row gap-2 center">
+            {tile.owner && <Crest faction={tile.owner} size={28} />}
+            <div className="h-display" style={{ fontSize: 18 }}>{town.name || terr.name}</div>
             <span className="pill">{terr.name}</span>
           </div>
-          <div style={{ width: 120 }} />
+          <div style={{ width: 100 }} />
         </div>
 
-        <div className="panel" style={{ background: "var(--bg-1)", padding: 24 }}>
-          <div className="row gap-4">
+        <div className="panel" style={{ background: "var(--bg-1)", padding: 12 }}>
+          <div className="row gap-3 center">
             <div style={{
-              width: 200, height: 160, borderRadius: 12,
-              background: terr.color, border: "3px solid var(--line)",
+              width: 96, height: 96, borderRadius: 10, flexShrink: 0,
+              background: terr.color, border: "2px solid var(--line)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 80, boxShadow: "var(--shadow-2)",
+              fontSize: 48, boxShadow: "var(--shadow-2)",
             }}>{town.icon || terr.icon}</div>
-            <div className="col gap-2 flex1">
-              <div className="h-display" style={{ fontSize: 16, color: "var(--ink-soft)" }}>Region Overview</div>
-              <div style={{ fontSize: 14, color: "var(--ink)" }}>{flavorText(tile)}</div>
-              <div className="row gap-2" style={{ marginTop: 6, flexWrap: "wrap" }}>
-                <span className="pill">+{tile.gold + (town.goldBonus || 0)}g income</span>
+            <div className="col gap-1 flex1" style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, color: "var(--ink)" }}>{flavorText(tile)}</div>
+              <div className="row gap-1" style={{ flexWrap: "wrap" }}>
+                <span className="pill">+{tile.gold + (town.goldBonus || 0)}g/r</span>
                 {terr.defBonus > 0 && <span className="pill">+{terr.defBonus} terrain def</span>}
                 {town.defBonus && <span className="pill">+{town.defBonus} town def</span>}
                 {tile.owner
@@ -106,7 +116,7 @@ export function LocalZone() {
           </div>
         </div>
 
-        <div className="row gap-3" style={{ flexWrap: "wrap" }}>
+        <div className="row gap-2" data-tut="facilities" style={{ flexWrap: "wrap" }}>
           {facilities.map((f) => {
             const onKey = (e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -121,14 +131,14 @@ export function LocalZone() {
                 tabIndex={0}
                 aria-label={`${f.name} — ${f.desc}`}
                 className="panel slide-up"
-                style={{ flex: "1 1 240px", cursor: "pointer", minWidth: 240 }}
+                style={{ flex: "1 1 220px", cursor: "pointer", minWidth: 220, padding: 10 }}
                 onClick={f.action}
                 onKeyDown={onKey}
               >
-                <div className="row gap-3 center">
-                  <div style={{ fontSize: 38 }}>{f.icon}</div>
-                  <div className="col">
-                    <div className="h-display" style={{ fontSize: 14 }}>{f.name}</div>
+                <div className="row gap-2 center">
+                  <div style={{ fontSize: 28 }}>{f.icon}</div>
+                  <div className="col" style={{ minWidth: 0, lineHeight: 1.2 }}>
+                    <div className="h-display" style={{ fontSize: 13 }}>{f.name}</div>
                     <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{f.desc}</div>
                   </div>
                 </div>
@@ -138,10 +148,10 @@ export function LocalZone() {
         </div>
 
         {tile.garrison && tile.garrison.length > 0 && (
-          <div className="panel">
-            <div className="panel-title">Garrison</div>
+          <div className="panel" style={{ padding: 10 }}>
+            <div className="panel-title" style={{ marginBottom: 6 }}>Garrison</div>
             <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-              {tile.garrison.map((g, i) => <UnitCard key={i} unitId={g.unit} count={g.count} variant="full" />)}
+              {tile.garrison.map((g, i) => <UnitCard key={i} unitId={g.unit} count={g.count} />)}
             </div>
           </div>
         )}

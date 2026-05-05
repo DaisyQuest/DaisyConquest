@@ -21,21 +21,21 @@ export function RoundSummaryScreen() {
 
   return (
     <div className="parchment full" style={{
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 40,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
     }}>
-      <div className="panel pop-in" style={{ maxWidth: 720, width: "100%" }}>
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 56 }}>{won ? "🏆" : "💀"}</div>
+      <div className="panel pop-in" style={{ maxWidth: 680, width: "100%", padding: 14 }}>
+        <div style={{ textAlign: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 40 }}>{won ? "🏆" : "💀"}</div>
           <div className="h-display" style={{
-            fontSize: 32,
+            fontSize: 24,
             color: won ? "var(--green-dk)" : "var(--blood)",
           }}>{won ? "VICTORY" : "DEFEAT"}</div>
-          <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-            The Battle of {region} · Duration {Math.round(s.duration || 0)}s
+          <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+            The Battle of {region} · {Math.round(s.duration || 0)}s
           </div>
         </div>
 
-        <div className="row gap-3" style={{ marginBottom: 16 }}>
+        <div className="row gap-2" style={{ marginBottom: 8 }}>
           <LossesPanel
             label={`${FACTIONS[s.attacker].short} (Attacker)`}
             losses={s.attackerLosses}
@@ -46,10 +46,10 @@ export function RoundSummaryScreen() {
           />
         </div>
 
-        <div className="panel" style={{ background: "var(--bg-1)" }}>
+        <div className="panel" style={{ background: "var(--bg-1)", padding: 8 }}>
           <div className="row between center">
-            <span className="h-ui">Hero XP Gained</span>
-            <span className="numeric h-display" style={{ color: "var(--gold-dk)", fontSize: 18 }}>
+            <span className="h-ui" style={{ fontSize: 12 }}>Hero XP Gained</span>
+            <span className="numeric h-display" style={{ color: "var(--gold-dk)", fontSize: 16 }}>
               +{Math.round(s.xp)}
             </span>
           </div>
@@ -57,7 +57,7 @@ export function RoundSummaryScreen() {
 
         <button
           className="btn btn-primary full"
-          style={{ width: "100%", justifyContent: "center", marginTop: 16 }}
+          style={{ width: "100%", justifyContent: "center", marginTop: 10 }}
           onClick={() => dispatch({ type: "DISMISS_SUMMARY" })}
         >Continue</button>
       </div>
@@ -67,14 +67,14 @@ export function RoundSummaryScreen() {
 
 function LossesPanel({ label, losses }) {
   return (
-    <div className="panel flex1" style={{ background: "var(--bg-1)" }}>
-      <div className="panel-title">{label}</div>
-      <div className="col gap-1">
+    <div className="panel flex1" style={{ background: "var(--bg-1)", padding: 8 }}>
+      <div className="panel-title" style={{ marginBottom: 4 }}>{label}</div>
+      <div className="col" style={{ lineHeight: 1.4 }}>
         {(!losses || losses.length === 0) && (
           <div style={{ fontSize: 12, color: "var(--green-dk)" }}>No losses.</div>
         )}
         {losses?.map((l, i) => (
-          <div key={i} className="row between" style={{ fontSize: 12 }}>
+          <div key={i} className="row between" style={{ fontSize: 11 }}>
             <span>{UNITS[l.unit]?.icon} {UNITS[l.unit]?.name}</span>
             <span className="numeric" style={{ color: "var(--blood)" }}>−{l.count}</span>
           </div>
