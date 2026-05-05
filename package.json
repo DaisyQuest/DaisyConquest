@@ -13,6 +13,7 @@
     "lint": "eslint src --ext .js,.jsx",
     "test": "vitest",
     "test:run": "vitest run",
+    "start": "node server.cjs",
     "electron": "electron .",
     "electron:dev": "concurrently -k -n vite,electron -c \"yellow,cyan\" \"npm:dev\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "vite build && electron-builder",
