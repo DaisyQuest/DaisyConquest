@@ -289,7 +289,7 @@ describe("PROMOTE_STACK", () => {
     expect(merged.xp).toBe(8);
   });
 
-  it("offers branched promotion at T2 (manAtArms → knight or ballista)", () => {
+  it("offers branched promotion at T2 (manAtArms → knight or paladin)", () => {
     let s = newGame();
     s = {
       ...s,
@@ -310,9 +310,9 @@ describe("PROMOTE_STACK", () => {
     });
     expect(knight.players.crown.hero.retinue[0].unit).toBe("knight");
 
-    const ballista = gameReducer(s, {
-      type: "PROMOTE_STACK", faction: "crown", stackIndex: 0, toUnit: "ballista",
+    const paladin = gameReducer(s, {
+      type: "PROMOTE_STACK", faction: "crown", stackIndex: 0, toUnit: "paladin",
     });
-    expect(ballista.players.crown.hero.retinue[0].unit).toBe("ballista");
+    expect(paladin.players.crown.hero.retinue[0].unit).toBe("paladin");
   });
 });
