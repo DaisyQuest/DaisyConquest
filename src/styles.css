@@ -389,6 +389,21 @@ html, body {
 }
 .float-up { animation: float-up 800ms ease-out forwards; }
 
+/* Threat pulse on enemy tiles abutting your border — keeps the player's
+   eye on tiles that may strike next. The slow pulse is gentler than a
+   full attention-grab so it doesn't drown out other map state. */
+@keyframes threat-pulse {
+  0%, 100% { stroke-opacity: 0.45; stroke-width: 3.0; }
+  50%      { stroke-opacity: 0.95; stroke-width: 4.5; }
+}
+
+/* Enemy march — the recent-move arrows breathe slightly so they read as
+   "live" rather than static decoration. */
+@keyframes enemy-march {
+  0%, 100% { stroke-opacity: 0.65; }
+  50%      { stroke-opacity: 1.0; }
+}
+
 /* === Combat fighter & feedback === */
 /* Position is driven by `left`/`top` from JS (RAF). The transition makes the
    per-tick steps read as smooth motion instead of a 30 Hz strobe. Movement

@@ -17,6 +17,9 @@ export const AI = {
     if (!owned.length) return state.map;
     const fac = FACTIONS[factionId];
 
+    // Track candidates as { from, to } pairs so we can stamp the captured
+    // tile with its source — the world map uses this to draw movement
+    // arrows the human player can see and intercept.
     const candidates = [];
     for (const o of owned) {
       for (const n of hexNeighbors(o, tiles)) {
@@ -24,15 +27,29 @@ export const AI = {
         if (n.terrain === "sea") continue;
         if (n.owner === factionId) continue;
         if (n.town === "capital" && n.owner) continue;
-        candidates.push(n);
+        candidates.push({ from: o, to: n });
       }
     }
     if (!candidates.length) return { ...state.map, tiles };
 
-    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const pickCand = candidates[Math.floor(Math.random() * candidates.length)];
+    const pick = pickCand.to;
+    const sourceTile = pickCand.from;
+
+    /* Stamp the destination with where the move came from + which round
+       it happened. WorldMap renders an arrow whenever lastMoveRound ===
+       state.round - 1 (i.e., "this happened during the AI's last turn"),
+       so the player gets one round to react before the trail fades. */
+    const stampMove = () => {
+      pick.lastMoveFromId = sourceTile.id;
+      pick.lastMoveRound  = state.round;
+      pick.lastMoveBy     = factionId;
+    };
+
     if (!pick.owner) {
       pick.owner = factionId;
       pick.garrison = [{ unit: fac.units[0], count: 1 + Math.floor(Math.random() * 2) }];
+      stampMove();
     } else {
       const attackerRetinue = [{ unit: fac.units[0], count: 3 }, { unit: fac.units[1], count: 1 }];
       const defenderFac = FACTIONS[pick.owner];
@@ -48,6 +65,7 @@ export const AI = {
       if (result.winner === "attacker") {
         pick.owner = factionId;
         pick.garrison = [{ unit: fac.units[0], count: 2 }];
+        stampMove();
       }
     }
     return { ...state.map, tiles };

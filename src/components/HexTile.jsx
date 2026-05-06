@@ -21,6 +21,7 @@ export function HexTile({
   visible = true,
   justRevealed = false,
   ownerKind,
+  threatened = false,
   onClick,
   onHover,
 }) {
@@ -138,6 +139,16 @@ export function HexTile({
           <polygon
             points="60,3 114,34 114,104 60,135 6,104 6,34"
             fill="rgba(255,255,255,0.18)" stroke="none"
+          />
+        )}
+        {/* Threat ring: enemy tile pressing your border. Pulses to draw
+            the eye — these are the rivals' next-move candidates. */}
+        {threatened && !selected && (
+          <polygon
+            points="60,3 114,34 114,104 60,135 6,104 6,34"
+            fill="none" stroke="#d8472b"
+            strokeWidth="3.5" strokeLinejoin="round"
+            style={{ animation: "threat-pulse 1.4s ease-in-out infinite" }}
           />
         )}
       </svg>

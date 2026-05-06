@@ -83,6 +83,47 @@ export function WorldMap() {
     return set;
   }, [tiles]);
 
+  /* Recent enemy moves: tiles the AI captured during the round that just
+     ended. Shown as arrows on the map so the player can see where rivals
+     are pushing in and decide whether to intercept. We clamp the arrow
+     set to moves that ended on a tile the player can currently see — no
+     point hinting at battles in fully-fogged territory. */
+  const humanFactionSet = useMemo(
+    () => new Set([state.humanFaction, state.coopFaction].filter(Boolean)),
+    [state.humanFaction, state.coopFaction],
+  );
+  const recentMoves = useMemo(() => {
+    const lastRound = state.round - 1;
+    if (lastRound < 1) return [];
+    const byId = new Map(tiles.map((t) => [t.id, t]));
+    const out = [];
+    for (const dest of tiles) {
+      if (dest.lastMoveRound !== lastRound) continue;
+      if (!dest.lastMoveBy || humanFactionSet.has(dest.lastMoveBy)) continue;
+      const src = byId.get(dest.lastMoveFromId);
+      if (!src) continue;
+      if (!visibleIds.has(dest.id) && !visibleIds.has(src.id)) continue;
+      out.push({ src, dest, faction: dest.lastMoveBy });
+    }
+    return out;
+  }, [tiles, state.round, humanFactionSet, visibleIds]);
+
+  /* Threatened set: enemy tiles that border at least one tile a human
+     player owns. These are the rivals' "next-move candidates" — a red
+     pulse on the rim is the cue to bulk a garrison or counterattack. */
+  const threatenedIds = useMemo(() => {
+    const set = new Set();
+    for (const t of tiles) {
+      if (!t.owner || humanFactionSet.has(t.owner)) continue;
+      if (!visibleIds.has(t.id)) continue;
+      const neighbors = hexNeighbors(t, tiles);
+      if (neighbors.some((n) => n && humanFactionSet.has(n.owner))) {
+        set.add(t.id);
+      }
+    }
+    return set;
+  }, [tiles, humanFactionSet, visibleIds]);
+
   const onTileClick = (tile) => {
     if (selectedId === tile.id) {
       const adj = adjacencyIds.has(tile.id) && tile.owner !== me;
@@ -146,10 +187,68 @@ export function WorldMap() {
               visible={visibleIds.has(t.id)}
               justRevealed={justRevealedIds.has(t.id)}
               ownerKind={ownerKindByTile.get(t.id)}
+              threatened={threatenedIds.has(t.id)}
               onClick={onTileClick}
               onHover={setHovered}
             />
           ))}
+          {/* Enemy-movement overlay. Drawn above the hex layer so arrows
+              read clearly, but pointer-events: none so it doesn't swallow
+              clicks. Each arrow is colored by the moving faction. */}
+          {recentMoves.length > 0 && (
+            <svg
+              width={mapW} height={mapH}
+              style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 5 }}
+            >
+              <defs>
+                {recentMoves.map((m, i) => {
+                  const fac = FACTIONS[m.faction];
+                  const c = fac?.palette?.primary || "#a02020";
+                  return (
+                    <marker
+                      key={`mk_${i}`}
+                      id={`enemy-arrow-${i}`}
+                      viewBox="0 0 10 10" refX="8" refY="5"
+                      markerWidth="6" markerHeight="6" orient="auto"
+                    >
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill={c} />
+                    </marker>
+                  );
+                })}
+              </defs>
+              {recentMoves.map((m, i) => {
+                const fac = FACTIONS[m.faction];
+                const c = fac?.palette?.primary || "#a02020";
+                const x1 = m.src.x + 60;
+                const y1 = m.src.y + 69;
+                const x2 = m.dest.x + 60;
+                const y2 = m.dest.y + 69;
+                // Bow the line slightly so two arrows in opposite
+                // directions don't perfectly overlap.
+                const mx = (x1 + x2) / 2;
+                const my = (y1 + y2) / 2;
+                const nx = -(y2 - y1);
+                const ny = (x2 - x1);
+                const len = Math.hypot(nx, ny) || 1;
+                const cx = mx + (nx / len) * 14;
+                const cy = my + (ny / len) * 14;
+                return (
+                  <g key={`mv_${i}`} style={{ animation: "enemy-march 1.6s ease-in-out infinite" }}>
+                    <path
+                      d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`}
+                      stroke={c}
+                      strokeWidth="3.5"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeOpacity="0.85"
+                      markerEnd={`url(#enemy-arrow-${i})`}
+                      style={{ filter: `drop-shadow(0 0 4px ${c})` }}
+                    />
+                  </g>
+                );
+              })}
+            </svg>
+          )}
         </div>
       </div>
 
@@ -187,6 +286,46 @@ export function WorldMap() {
             />
           )}
         </div>
+
+        {(recentMoves.length > 0 || threatenedIds.size > 0) && (
+          <div className="panel" style={{ padding: 10 }}>
+            <div className="row between center" style={{ marginBottom: 4 }}>
+              <div className="panel-title" style={{ margin: 0 }}>Enemy Activity</div>
+              <span className="pill" style={{
+                fontSize: 9, background: "var(--blood)", color: "#fff",
+              }}>R{state.round - 1}</span>
+            </div>
+            {recentMoves.length === 0 ? (
+              <div style={{ fontSize: 11, color: "var(--ink-soft)", fontStyle: "italic" }}>
+                No movement seen last round, but {threatenedIds.size} hostile tile{threatenedIds.size === 1 ? "" : "s"} press your border.
+              </div>
+            ) : (
+              <div className="col" style={{ fontSize: 11, lineHeight: 1.4 }}>
+                {recentMoves.map((m, i) => {
+                  const fac = FACTIONS[m.faction];
+                  const destLabel = TOWN_TYPES[m.dest.town]?.name
+                    || TERRAINS[m.dest.terrain]?.name || "Region";
+                  return (
+                    <div key={i}>
+                      <span style={{ color: fac?.palette?.primary, fontWeight: 700 }}>
+                        {fac?.short || m.faction}
+                      </span>
+                      {" "}seized <b>{destLabel}</b>
+                      <span style={{ color: "var(--ink-soft)" }}> ({m.dest.q},{m.dest.r})</span>
+                    </div>
+                  );
+                })}
+                {threatenedIds.size > 0 && (
+                  <div style={{
+                    marginTop: 4, fontSize: 10, color: "var(--ink-soft)", fontStyle: "italic",
+                  }}>
+                    {threatenedIds.size} tile{threatenedIds.size === 1 ? "" : "s"} with red rim could strike next.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="panel" style={{ padding: 10 }}>
           <div className="panel-title" style={{ marginBottom: 4 }}>Chronicle</div>
