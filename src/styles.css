@@ -609,6 +609,17 @@ html, body {
 }
 .battle-intro { animation: battleIntro 360ms ease-out; }
 
+/* Center-screen cast banner. Pops in fast, holds, then fades. The
+   key on the React node restarts this animation each cast. */
+@keyframes bfCastBanner {
+  0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+  18%  { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+  30%  { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
+  85%  { transform: translate(-50%, -50%) scale(1.0); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.0); opacity: 0; }
+}
+.bf-cast-banner { animation: bfCastBanner 1100ms ease-out forwards; }
+
 /* Targeting line — drawn between attacker and target on hover, faint */
 .targeting-line { stroke: rgba(255,230,170,0.55); stroke-width: 2; stroke-dasharray: 4 3; }
 

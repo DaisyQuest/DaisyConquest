@@ -94,6 +94,10 @@ function BattleArena({ pb, state, dispatch }) {
   // sparkles, death poofs (parallel array so we don't lose them when the
   // dying fighter unmounts), edge flashes for ability casts and hero pain.
   const [vfx, setVfx] = useState({ shakeT: 0, bursts: [], sparkles: [], poofs: [] });
+  // Center-screen "cast banner" — a single, big, animated readout when an
+  // ability fires. Holds the most recent cast and a timestamp; React keys
+  // the element off the timestamp so the CSS animation replays each cast.
+  const [castBanner, setCastBanner] = useState(null);
   const heroPortraitRef = useRef(null);
   const battlefieldRef = useRef(null);
 
@@ -149,6 +153,23 @@ function BattleArena({ pb, state, dispatch }) {
         shake = Math.max(shake, 1);
         edge = "gold";
         if (ev.side === "L") castedSide = "L";
+        // Banner: stamp the cast with a fresh timestamp so the keyed
+        // child re-mounts and replays its animation. Resolve the
+        // ability id against the current side's hero so we can show the
+        // pretty name + icon instead of the bare id.
+        const heroSide = bs.fighters.find(
+          (h) => h.kind === "hero" && h.side === ev.side && h.alive
+        );
+        const ab = heroSide?.abilities?.find((x) => x.id === ev.abilityId);
+        if (ab) {
+          setCastBanner({
+            t: now,
+            side: ev.side,
+            name: ab.name,
+            icon: ab.icon,
+            effect: ab.effect,
+          });
+        }
       } else if (ev.kind === "aoe") {
         if (ev.at) {
           bursts.push({
@@ -326,9 +347,37 @@ function BattleArena({ pb, state, dispatch }) {
     if (fighter.side === "L") kills.R += 1; else kills.L += 1;
   }
 
-  // Recent events for the bottom-of-arena ticker. Last 4 hit/heal/die/
-  // ability/revive lines, formatted into a one-line phrase each.
-  const tickerEvents = (bs.events || []).slice(-12).filter((e) => e.kind !== "hit" || e.dmg >= 8).slice(-4);
+  // Recent events for the bottom-of-arena ticker. We always show kills,
+  // ability casts, heals, revives, and crits — they're the events the
+  // player most wants to register. Plain hits filter to dmg >= 4 so the
+  // ticker doesn't fill with chip damage from levies.
+  const tickerEvents = (bs.events || [])
+    .slice(-30)
+    .filter((e) => {
+      if (e.kind === "hit") return e.isCrit || e.dmg >= 4;
+      return e.kind === "die" || e.kind === "ability"
+          || e.kind === "heal" || e.kind === "revive";
+    })
+    .slice(-5);
+
+  // Per-lane scoreboard: alive-HP totals for each lane on each side. Lets
+  // the player see at a glance which lane they're winning. Dead fighters
+  // are excluded; max-hp totals stay so the bar doesn't shift wildly when
+  // someone dies (it just shrinks toward zero).
+  const laneStats = [0, 1, 2].map((lane) => {
+    let lAlive = 0, lTotal = 0, rAlive = 0, rTotal = 0;
+    for (const f of bs.fighters) {
+      if (f.lane !== lane) continue;
+      if (f.side === "L") {
+        lTotal += f.maxHp;
+        if (f.alive) lAlive += f.hp;
+      } else {
+        rTotal += f.maxHp;
+        if (f.alive) rAlive += f.hp;
+      }
+    }
+    return { lane, lAlive, lTotal, rAlive, rTotal };
+  });
 
   const battleTitle = TOWN_TYPES[tile.town]?.name || TERRAINS[tile.terrain].name;
 
@@ -419,7 +468,86 @@ function BattleArena({ pb, state, dispatch }) {
           </div>
         ))}
 
+        {/* Per-lane scoreboard: thin tug-of-war bars on the right edge of
+            each lane band. Player sees at a glance who is winning where —
+            green slice = your living HP in that lane, red = enemy HP. */}
+        {laneStats.map((s) => {
+          const sum = s.lAlive + s.rAlive;
+          if (sum <= 0) return null;
+          const lPct = (s.lAlive / sum) * 100;
+          const yMid = s.lane * 33.33 + 33.33 / 2;
+          return (
+            <div
+              key={`lanebar-${s.lane}`}
+              className="bf-lane-bar"
+              style={{
+                position: "absolute", top: `${yMid}%`,
+                right: 8, transform: "translateY(-50%)",
+                width: 88, height: 12,
+                background: "rgba(8,4,2,0.7)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: 6, overflow: "hidden",
+                display: "flex", flexDirection: "row",
+                pointerEvents: "none", zIndex: 7,
+                boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+              }}
+              title={`${LANE_NAMES[s.lane]}: ${Math.round(s.lAlive)} vs ${Math.round(s.rAlive)}`}
+            >
+              <div style={{
+                width: `${lPct}%`,
+                background: "linear-gradient(180deg, #d4a84b, #b8851f)",
+                transition: "width 240ms ease-out",
+              }} />
+              <div style={{
+                width: `${100 - lPct}%`,
+                background: "linear-gradient(180deg, #c44a4a, #871f1f)",
+                transition: "width 240ms ease-out",
+              }} />
+            </div>
+          );
+        })}
+
         <div className="bf-divider" />
+
+        {/* Cast banner — center-screen call-out when an ability fires.
+            Keyed by the cast timestamp so each new cast replays the
+            entrance animation. Side-tinted: gold for you, red for the
+            enemy hero so the player instantly registers who lit it. */}
+        {castBanner && performance.now() - castBanner.t < 1100 && (
+          <div
+            key={castBanner.t}
+            className="bf-cast-banner"
+            style={{
+              position: "absolute", top: "32%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              padding: "10px 20px",
+              background: "rgba(8,4,2,0.88)",
+              border: `3px solid ${castBanner.side === "L" ? "var(--gold)" : "#c44a4a"}`,
+              borderRadius: 14,
+              color: "#fff7e6",
+              textAlign: "center",
+              boxShadow: castBanner.side === "L"
+                ? "0 0 30px rgba(255,210,90,0.55)"
+                : "0 0 30px rgba(196,74,74,0.55)",
+              pointerEvents: "none",
+              zIndex: 12,
+              minWidth: 180,
+            }}
+          >
+            <div className="numeric" style={{
+              fontSize: 11, opacity: 0.7,
+              letterSpacing: "0.12em", textTransform: "uppercase",
+            }}>
+              {castBanner.side === "L" ? "You cast" : "Enemy casts"}
+            </div>
+            <div className="h-display" style={{ fontSize: 22, lineHeight: 1.1, marginTop: 2 }}>
+              <span style={{ marginRight: 8 }}>{castBanner.icon}</span>{castBanner.name.toUpperCase()}
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4, fontStyle: "italic" }}>
+              {castBanner.effect}
+            </div>
+          </div>
+        )}
 
         {/* Event ticker — last few interesting things in plain English so
             the player can read what's happening without watching every
@@ -607,11 +735,98 @@ function BattleArena({ pb, state, dispatch }) {
           display: "flex", alignItems: "center", justifyContent: "center",
           zIndex: 50,
         }}>
-          <div className="panel pop-in" style={{ padding: 36, textAlign: "center", background: "var(--bg-1)" }}>
-            <div className="h-display" style={{ fontSize: 38 }}>
+          <div className="panel pop-in" style={{
+            padding: 28, textAlign: "center", background: "var(--bg-1)",
+            minWidth: 360,
+          }}>
+            <div className="h-display" style={{
+              fontSize: 38,
+              color: bs.winner === "L" ? "var(--gold-dk)" : "var(--blood)",
+            }}>
               {bs.winner === "L" ? "VICTORY" : "DEFEAT"}
             </div>
-            <div style={{ fontSize: 14, color: "var(--ink-soft)", marginTop: 6 }}>Resolving the field…</div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4, marginBottom: 12 }}>
+              Battle for <b>{battleTitle}</b>
+            </div>
+            <BattleScoreboard bs={bs} kills={kills} attacker={attacker} defender={defender} />
+            <div style={{ fontSize: 13, color: "var(--ink-soft)", marginTop: 12 }}>Resolving the field…</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* End-of-battle scoreboard. Reads bs.events to surface the headline
+   numbers — kills per side, biggest hit landed, duration. Pure cosmetic
+   (RESOLVE_BATTLE handles XP/loot from the same data) so it can read
+   directly from the live bs without a separate model. */
+function BattleScoreboard({ bs, kills, attacker, defender }) {
+  let biggestHit = { dmg: 0, fromName: null, toName: null, isCrit: false };
+  for (const ev of bs.events || []) {
+    if (ev.kind !== "hit" || !ev.dmg) continue;
+    if (ev.dmg > biggestHit.dmg) {
+      const f = bs.fighters.find((x) => x.uid === ev.from);
+      const t = bs.fighters.find((x) => x.uid === ev.to);
+      biggestHit = {
+        dmg: ev.dmg,
+        fromName: f?.name || "—",
+        toName: t?.name || "—",
+        isCrit: !!ev.isCrit,
+        side: f?.side,
+      };
+    }
+  }
+  const facA = FACTIONS[attacker];
+  const facD = FACTIONS[defender];
+  const cell = {
+    padding: "8px 10px",
+    background: "var(--bg-2)",
+    border: "1px solid var(--line)",
+    borderRadius: 8,
+    minWidth: 110,
+  };
+  return (
+    <div className="col gap-2" style={{ alignItems: "center" }}>
+      <div className="row gap-2 center">
+        <div style={{ ...cell }}>
+          <div style={{ fontSize: 9, color: "var(--ink-soft)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            {facA.short} kills
+          </div>
+          <div className="numeric h-display" style={{ fontSize: 22, color: "var(--gold-dk)" }}>
+            ⚔ {kills.L}
+          </div>
+        </div>
+        <div style={cell}>
+          <div style={{ fontSize: 9, color: "var(--ink-soft)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Duration
+          </div>
+          <div className="numeric h-display" style={{ fontSize: 22 }}>
+            {bs.time.toFixed(1)}s
+          </div>
+        </div>
+        <div style={cell}>
+          <div style={{ fontSize: 9, color: "var(--ink-soft)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            {facD.short} kills
+          </div>
+          <div className="numeric h-display" style={{ fontSize: 22, color: "var(--blood)" }}>
+            ⚔ {kills.R}
+          </div>
+        </div>
+      </div>
+      {biggestHit.dmg > 0 && (
+        <div style={{
+          padding: "6px 12px",
+          background: biggestHit.isCrit ? "rgba(255,210,90,0.18)" : "var(--bg-2)",
+          border: `1px solid ${biggestHit.isCrit ? "var(--gold)" : "var(--line)"}`,
+          borderRadius: 8, fontSize: 11, color: "var(--ink)",
+          maxWidth: 320,
+        }}>
+          <span style={{ color: "var(--ink-soft)", letterSpacing: "0.08em", textTransform: "uppercase", fontSize: 9 }}>
+            Biggest Hit{biggestHit.isCrit ? " · CRIT" : ""}
+          </span>
+          <div style={{ marginTop: 2 }}>
+            <b>{biggestHit.fromName}</b> on <b>{biggestHit.toName}</b> — <span className="numeric">{biggestHit.dmg}</span>
           </div>
         </div>
       )}
