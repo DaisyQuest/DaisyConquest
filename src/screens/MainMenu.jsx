@@ -55,7 +55,7 @@ export function MainMenu() {
     <div className="parchment full" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <TutorialOverlay stepId="main.intro" steps={tutorialSteps} />
       <div className="col gap-3" style={{ maxWidth: 720, width: "100%", textAlign: "center" }}>
-        <div className="h-display" style={{ fontSize: 44, letterSpacing: "0.08em", color: "var(--ink)" }}>Iron Crowns</div>
+        <div className="h-display" style={{ fontSize: 44, letterSpacing: "0.08em", color: "var(--ink)" }}>DaisyConquest</div>
         <div style={{ fontSize: 14, color: "var(--ink-soft)", marginTop: -6, fontStyle: "italic" }}>
           Four houses. One throne. Take what is yours.
         </div>

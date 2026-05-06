@@ -102,5 +102,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Iron Crowns static server listening on :${PORT} (root=${ROOT})`);
+  console.log(`DaisyConquest static server listening on :${PORT} (root=${ROOT})`);
 });

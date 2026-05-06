@@ -6,7 +6,7 @@
    "Suppress Tutorials" toggle (sets suppressed: true) and a Reset button
    (clears `seen` so the next visit shows everything again). */
 
-const KEY = "ironcrowns.tutorial.v1";
+const KEY = "daisyconquest.tutorial.v1";
 
 function load() {
   try {

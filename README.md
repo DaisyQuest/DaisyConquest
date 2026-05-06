@@ -1,4 +1,4 @@
-# Iron Crowns
+# DaisyConquest
 
 A Feudalism-style semi-autobattler. Four houses fight for one throne across a hex world map, with lane-based auto-battles, hero progression, random encounters, a wave-defense minigame, fog of war, local co-op, and an Electron desktop client with auto-updates.
 
@@ -38,14 +38,14 @@ src/
 
 electron/
   main.cjs     Main process: BrowserWindow + electron-updater + IPC
-  preload.cjs  Sandboxed bridge: exposes window.__ironCrowns to the renderer
+  preload.cjs  Sandboxed bridge: exposes window.__daisyConquest to the renderer
 
 tests/         Vitest deterministic suites (reducer, economy, save, rng)
 ```
 
 ## Electron + web sync guarantee
 
-The desktop and web clients are built from the same `src/` tree. **There is no game-logic code in `electron/`.** The only desktop-specific addition is `src/components/UpdateBanner.jsx`, and even that is gated on a runtime feature check (`window.__ironCrowns?.isDesktop`) — when the same component renders in the web client, it returns null.
+The desktop and web clients are built from the same `src/` tree. **There is no game-logic code in `electron/`.** The only desktop-specific addition is `src/components/UpdateBanner.jsx`, and even that is gated on a runtime feature check (`window.__daisyConquest?.isDesktop`) — when the same component renders in the web client, it returns null.
 
 The packaging pipeline guarantees this structurally:
 
@@ -74,7 +74,7 @@ On launch, the desktop app silently checks the manifest, downloads any newer ver
 
 ## Save format
 
-JSON in localStorage under `ironcrowns.save.v1`. Versioned for migrations.
+JSON in localStorage under `daisyconquest.save.v1`. Versioned for migrations.
 
 **Note on desktop saves**: Electron's renderer has its own localStorage scoped to the user-data directory, separate from your browser. Saves don't sync between the desktop client and the web client. Cross-device save sync would require a backend; out of scope.
 

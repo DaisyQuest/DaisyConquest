@@ -1,8 +1,8 @@
-/* Preload — exposes a tiny, audited API on `window.__ironCrowns` so the
+/* Preload — exposes a tiny, audited API on `window.__daisyConquest` so the
  * renderer can listen for auto-update events and trigger a restart.
  *
  * Web client never sees this object. Renderer-side code that wants to react
- * to update status checks `window.__ironCrowns?.isDesktop` first — see
+ * to update status checks `window.__daisyConquest?.isDesktop` first — see
  * src/components/UpdateBanner.jsx.
  *
  * We run with contextIsolation + sandbox: this preload is the *only*
@@ -10,7 +10,7 @@
  */
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("__ironCrowns", {
+contextBridge.exposeInMainWorld("__daisyConquest", {
   isDesktop: true,
 
   // Subscribe to update lifecycle events. Returns an unsubscribe fn.

@@ -1,19 +1,19 @@
 /* UpdateBanner — desktop-only auto-update toast.
  *
  * Listens to update lifecycle events emitted by the Electron preload
- * (`window.__ironCrowns`). When running in the web client this global is
+ * (`window.__daisyConquest`). When running in the web client this global is
  * undefined; the component renders null and there is no fork in game logic.
  *
  * Visible states:
  *   - downloading → "Updating to vX.Y.Z… 42%"
- *   - downloaded  → "Iron Crowns vX.Y.Z is ready" + Restart button
+ *   - downloaded  → "DaisyConquest vX.Y.Z is ready" + Restart button
  * Other states (checking / current / error) stay silent so we don't spam
  * the player with updater chrome they don't care about.
  */
 import { useEffect, useState } from "react";
 
 export function UpdateBanner() {
-  const api = typeof window !== "undefined" ? window.__ironCrowns : null;
+  const api = typeof window !== "undefined" ? window.__daisyConquest : null;
   const [status, setStatus] = useState(null);
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export function UpdateBanner() {
         <>
           <span className="dot" style={{ background: "var(--green)" }} />
           <span>
-            Iron Crowns{version ? ` v${version}` : ""} is ready.
+            DaisyConquest{version ? ` v${version}` : ""} is ready.
           </span>
           <button
             className="btn btn-primary"

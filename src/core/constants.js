@@ -31,6 +31,6 @@ export const CONST = {
     WAVE_GAP_MS: 800,
   },
 
-  SAVE_KEY: "ironcrowns.save.v1",
+  SAVE_KEY: "daisyconquest.save.v1",
   SAVE_AUTOSAVE_MS: 3000,
 };

@@ -1,5 +1,5 @@
 {
-  "name": "iron-crowns",
+  "name": "daisyconquest",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -39,8 +39,8 @@
     "wait-on": "^9.0.5"
   },
   "build": {
-    "appId": "com.daisyconquest.ironcrowns",
-    "productName": "Iron Crowns",
+    "appId": "com.daisyconquest.app",
+    "productName": "DaisyConquest",
     "copyright": "Copyright \u00a9 ${author}",
     "directories": {
       "output": "release"
@@ -64,7 +64,7 @@
       "target": [
         { "target": "nsis", "arch": ["x64"] }
       ],
-      "artifactName": "IronCrowns-Setup-${version}.${ext}"
+      "artifactName": "DaisyConquest-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -74,12 +74,12 @@
     "mac": {
       "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
       "category": "public.app-category.games",
-      "artifactName": "IronCrowns-${version}-${arch}.${ext}"
+      "artifactName": "DaisyConquest-${version}-${arch}.${ext}"
     },
     "linux": {
       "target": [{ "target": "AppImage", "arch": ["x64"] }],
       "category": "Game",
-      "artifactName": "IronCrowns-${version}-${arch}.${ext}"
+      "artifactName": "DaisyConquest-${version}-${arch}.${ext}"
     }
   }
 }

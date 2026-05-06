@@ -53,7 +53,7 @@ export function GoldBar() {
       <div className="row gap-2 center" data-tut="topbar-identity">
         <Crest faction={state.activePlayer} size={30} />
         <div className="col" style={{ lineHeight: 1 }}>
-          <span className="crown" style={{ fontSize: 14 }}>Iron Crowns</span>
+          <span className="crown" style={{ fontSize: 14 }}>DaisyConquest</span>
           <span style={{
             fontSize: 9, color: accent,
             letterSpacing: "0.08em", textTransform: "uppercase",

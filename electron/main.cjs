@@ -1,4 +1,4 @@
-/* Iron Crowns — Electron main process.
+/* DaisyConquest — Electron main process.
  *
  * The desktop client is a thin shell around the Vite-built web bundle.
  * No game logic lives here, by design — see README "Electron + web sync
@@ -32,7 +32,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 720,
     backgroundColor: "#1a1410",
-    title: "Iron Crowns",
+    title: "DaisyConquest",
     show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
