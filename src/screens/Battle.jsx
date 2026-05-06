@@ -74,7 +74,11 @@ function BattleArena({ pb, state, dispatch }) {
   }
 
   const [bs, setBs] = useState(setupRef.current);
-  const [speed, setSpeed] = useState(CONST.BATTLE.DEFAULT_SPEED);
+  // Slider multiplier. The actual sim dt is `slider * DEFAULT_SPEED` so the
+  // buttons read as relative-to-default (1× = whatever the global default is,
+  // 5× = five times default). DEFAULT_SPEED is the only knob for "feels too
+  // fast / too slow"; the slider lets the player scrub fights from there.
+  const [speed, setSpeed] = useState(1);
   const [paused, setPaused] = useState(false);
   const lastT = useRef(performance.now());
   const speedRef = useRef(speed);
@@ -264,7 +268,7 @@ function BattleArena({ pb, state, dispatch }) {
     let raf;
     lastT.current = performance.now();
     const loop = (now) => {
-      const sp = speedRef.current;
+      const sp = speedRef.current * CONST.BATTLE.DEFAULT_SPEED;
       let dt = ((now - lastT.current) / 1000) * sp;
       lastT.current = now;
       dt = Math.min(0.5, dt);

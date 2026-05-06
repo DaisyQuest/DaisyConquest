@@ -381,9 +381,12 @@ function BraceModal({ onReady }) {
             <span style={{ color: "var(--ink-soft)" }}> ({defenderFac.short})</span>
           )}.
         </div>
-        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 16 }}>
-          Place defenders along the path. Hold the gate until the last wave
-          breaks. Click a unit, then click a slot to deploy.
+        <div style={{ fontSize: 12, color: "var(--ink-soft)", marginBottom: 16, lineHeight: 1.5 }}>
+          Defenders are <b>turrets</b>: they hold their slot and shoot at
+          enemies in range. <b>Range</b> matters — archers cover wide arcs,
+          melee only swing at foes stepping past their slot. Pick a unit
+          below, click a slot to deploy. Right-click a placed unit to recall
+          it for free if you need to reposition.
         </div>
         <button className="btn btn-primary" onClick={onReady}>
           Brace for the assault
@@ -428,6 +431,7 @@ function DefenseMinigame() {
   }
   const [ds, setDs] = useState(dsRef.current);
   const [selected, setSelected] = useState(null);
+  const [hoverSlot, setHoverSlot] = useState(null);
   const lastT = useRef(performance.now());
 
   useEffect(() => {
@@ -455,7 +459,7 @@ function DefenseMinigame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ds.ended]);
 
-  const slots = Array.from({ length: 5 }, (_, i) => i);
+  const slots = Defense.SLOT_POSITIONS.map((_, i) => i);
   const placeAt = (slotIdx) => {
     if (!selected) return;
     setDs((prev) =>
@@ -470,6 +474,38 @@ function DefenseMinigame() {
       )
     );
   };
+  const refundAt = (slotIdx) => {
+    setDs((prev) =>
+      Defense.refund(
+        {
+          ...prev,
+          defenders: prev.defenders.slice(),
+          availableDefenders: prev.availableDefenders.map((s) => ({ ...s })),
+        },
+        slotIdx
+      )
+    );
+  };
+
+  // Range circle preview: when the player hovers a slot with a unit
+  // selected, show the unit's reach. When hovering a placed defender,
+  // show its actual reach. Both use the same Defense.RANGE_SCALE.
+  const previewSlot = hoverSlot != null ? hoverSlot : null;
+  let previewRange = 0;
+  let previewPos = null;
+  if (previewSlot != null) {
+    const placed = ds.defenders.find((d) => d.slotIdx === previewSlot);
+    if (placed) {
+      previewRange = placed.range * Defense.RANGE_SCALE;
+      previewPos = Defense.SLOT_POSITIONS[previewSlot];
+    } else if (selected && UNITS[selected]) {
+      previewRange = UNITS[selected].range * Defense.RANGE_SCALE;
+      previewPos = Defense.SLOT_POSITIONS[previewSlot];
+    }
+  }
+
+  const nextWave = ds.waves[ds.waveIdx];
+  const upcoming = nextWave ? UNITS[nextWave.unitId] : null;
 
   const finish = () => {
     if (training) {
@@ -514,30 +550,88 @@ function DefenseMinigame() {
           <path d={pathD} stroke="rgba(42,29,18,0.4)" strokeWidth="6" fill="none" strokeLinejoin="round" strokeLinecap="round" />
           <path d={pathD} stroke="#d4b885" strokeWidth="3" fill="none" strokeDasharray="2 2" strokeLinejoin="round" strokeLinecap="round" />
           <circle cx="100" cy="40" r="4" fill="var(--gold)" stroke="var(--line)" strokeWidth="0.5" />
+          {/* Persistent range rings on every placed defender — keeps it
+              easy to see who covers what during a fight. */}
+          {ds.defenders.map((d) => {
+            const p = Defense.SLOT_POSITIONS[d.slotIdx];
+            if (!p) return null;
+            const r = d.range * Defense.RANGE_SCALE;
+            return (
+              <circle
+                key={`r_${d.uid}`}
+                cx={p.x} cy={p.y} r={r}
+                fill={FACTIONS[defenderFaction].palette.primary}
+                fillOpacity="0.06"
+                stroke={FACTIONS[defenderFaction].palette.primary}
+                strokeOpacity="0.35"
+                strokeWidth="0.4"
+                strokeDasharray="0.8 0.8"
+                pointerEvents="none"
+              />
+            );
+          })}
+          {/* Hover preview ring — bolder, only while the player is sizing
+              up a slot. Drives the "where do I put this archer" feel. */}
+          {previewPos && previewRange > 0 && (
+            <circle
+              cx={previewPos.x} cy={previewPos.y} r={previewRange}
+              fill="rgba(255, 220, 100, 0.10)"
+              stroke="rgba(255, 200, 60, 0.8)"
+              strokeWidth="0.6"
+              pointerEvents="none"
+            />
+          )}
         </svg>
 
         {slots.map((s) => {
           const placed = ds.defenders.find((d) => d.slotIdx === s);
-          const slotX = 12 + s * 18;
+          const slotPos = Defense.SLOT_POSITIONS[s];
+          const canPlace = !!selected && !placed;
           return (
             <div
               key={s}
               onClick={() => placeAt(s)}
+              onContextMenu={(e) => { e.preventDefault(); if (placed) refundAt(s); }}
+              onMouseEnter={() => setHoverSlot(s)}
+              onMouseLeave={() => setHoverSlot((h) => (h === s ? null : h))}
+              title={placed
+                ? `${placed.name} L${placed.lvl ?? 1} — ${placed.hp}/${placed.maxHp} hp · atk ${placed.atk} · range ${placed.range} · right-click to recall`
+                : (selected
+                    ? `Click to deploy ${UNITS[selected]?.name ?? selected}`
+                    : "Empty slot — pick a unit below to deploy")}
               style={{
                 position: "absolute",
-                left: `${slotX}%`, top: "50%",
+                left: `${slotPos.x}%`, top: `${slotPos.y}%`,
                 transform: "translate(-50%, -50%)",
                 width: 44, height: 44,
-                background: placed ? FACTIONS[defenderFaction].palette.primary : "rgba(255,255,255,0.2)",
-                border: `2px dashed ${placed ? "var(--line)" : "rgba(42,29,18,0.5)"}`,
+                background: placed
+                  ? FACTIONS[defenderFaction].palette.primary
+                  : (canPlace ? "rgba(255,220,100,0.35)" : "rgba(255,255,255,0.2)"),
+                border: `2px ${placed ? "solid" : "dashed"} ${
+                  placed ? "var(--line)"
+                  : (canPlace ? "rgba(255,200,60,0.9)" : "rgba(42,29,18,0.5)")
+                }`,
                 borderRadius: 8,
-                cursor: selected && !placed ? "pointer" : "default",
+                cursor: placed ? "context-menu" : (canPlace ? "pointer" : "default"),
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 22,
                 zIndex: 3,
+                transition: "background 80ms, border-color 80ms",
               }}
             >
-              {placed ? placed.icon : (selected ? "+" : "")}
+              {placed ? placed.icon : (canPlace ? "+" : "")}
+              {placed && (placed.lvl ?? 1) > 1 && (
+                <span
+                  className="numeric"
+                  style={{
+                    position: "absolute", top: -6, right: -6,
+                    fontSize: 10, fontWeight: 800,
+                    background: "var(--gold)", color: "var(--ink)",
+                    border: "1px solid var(--line)", borderRadius: 8,
+                    padding: "0 4px", lineHeight: 1.4,
+                  }}
+                >L{placed.lvl}</span>
+              )}
               {placed && (
                 <div style={{
                   position: "absolute", bottom: -6, left: 2, right: 2,
@@ -587,30 +681,82 @@ function DefenseMinigame() {
               position: "absolute",
               left: `${f.x}%`, top: `${f.y}%`,
               transform: "translate(-50%, -50%)",
-              color: "var(--blood)", fontWeight: 800,
+              color: f.kind === "ouch" ? "#c84020" : "var(--gold-dk)",
+              fontWeight: 800,
               textShadow: "0 1px 0 #fff", zIndex: 6,
             }}
           >{f.text}</div>
         ))}
       </div>
 
-      <div className="row gap-2 center" style={{
-        padding: "12px 24px",
+      <div className="col gap-1" style={{
+        padding: "10px 24px 12px",
         borderTop: "2px solid var(--line)",
         background: "var(--bg-2)",
       }}>
-        <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>Click a unit, then click a slot to deploy.</div>
-        <div className="row gap-2 flex1">
-          {ds.availableDefenders.map((s) => (
-            <button
-              key={s.unit}
-              className={`btn ${selected === s.unit ? "btn-primary" : "btn-ghost"}`}
-              disabled={s.count <= 0}
-              onClick={() => setSelected(selected === s.unit ? null : s.unit)}
-            >
-              {UNITS[s.unit].icon} {UNITS[s.unit].name} <span className="pill">×{s.count}</span>
-            </button>
-          ))}
+        <div className="row between center" style={{ fontSize: 11 }}>
+          <div className="row gap-3 center">
+            <span style={{ color: "var(--ink-soft)" }}>
+              Click a unit then click a slot to deploy. Right-click a placed unit to recall.
+            </span>
+          </div>
+          {upcoming && (
+            <div className="row gap-2 center" style={{ fontSize: 11 }}>
+              <span style={{ color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Next wave:
+              </span>
+              <span className="pill" title={`${upcoming.name} — atk ${upcoming.atk}, def ${upcoming.def}, hp ${upcoming.hp}, spd ${upcoming.spd}`}>
+                {upcoming.icon} {nextWave.count - nextWave.spawned}× {upcoming.name}
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+          {ds.availableDefenders.map((s) => {
+            const u = UNITS[s.unit];
+            if (!u) return null;
+            const isSelected = selected === s.unit;
+            const lvl = s.lvl ?? 1;
+            const m = 1 + Math.max(0, lvl - 1) * 0.10;
+            const atk = Math.round(u.atk * m);
+            const def = Math.round(u.def * m);
+            const hp = Math.round(u.hp * m);
+            return (
+              <button
+                key={s.unit}
+                className={`btn ${isSelected ? "btn-primary" : "btn-ghost"}`}
+                disabled={s.count <= 0}
+                onClick={() => setSelected(isSelected ? null : s.unit)}
+                title={`${u.name} L${lvl} — atk ${atk} · def ${def} · hp ${hp} · range ${u.range}`}
+                style={{
+                  display: "flex", flexDirection: "column", alignItems: "flex-start",
+                  gap: 2, padding: "5px 10px", lineHeight: 1.2, minWidth: 110,
+                  opacity: s.count <= 0 ? 0.5 : 1,
+                }}
+              >
+                <span className="row gap-1 center" style={{ fontSize: 12, fontWeight: 700 }}>
+                  <span style={{ fontSize: 14 }}>{u.icon}</span>
+                  {u.name}
+                  <span className="pill" style={{ fontSize: 10 }}>×{s.count}</span>
+                  {lvl > 1 && (
+                    <span className="pill" style={{ fontSize: 9, background: "var(--gold)", color: "var(--ink)" }}>L{lvl}</span>
+                  )}
+                </span>
+                <span style={{
+                  fontSize: 10,
+                  color: isSelected ? "var(--ink)" : "var(--ink-soft)",
+                  fontFamily: "var(--font-mono)",
+                }}>
+                  ⚔{atk} 🛡{def} ❤{hp} 📏{u.range}
+                </span>
+              </button>
+            );
+          })}
+          {ds.availableDefenders.every((s) => s.count <= 0) && (
+            <span style={{ fontSize: 11, color: "var(--ink-soft)", fontStyle: "italic" }}>
+              All defenders deployed. Right-click a slot to recall a unit and reposition.
+            </span>
+          )}
         </div>
       </div>
 
