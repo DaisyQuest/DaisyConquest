@@ -93,10 +93,19 @@ export const Defense = {
       availableDefenders: defenderRetinue.map((s) => ({ ...s })),
       defenderPerks,
       baseHp: 150,
+      maxBaseHp: 150,
       gold: 30,
       ended: false,
       won: null,
       floats: [],
+      // Projectile / swing visuals — a short-lived list of in-flight shots.
+      // Each entry is { fromX, fromY, toX, toY, t, life, ranged }. The tick
+      // decays `t` toward `life` and the renderer interpolates the head's
+      // position. When t >= life the entry is culled.
+      shots: [],
+      // Wave entrance pulses at the spawn point, also short-lived. Lets
+      // the player see "a unit is arriving here" before the icon resolves.
+      spawnFlashes: [],
     };
   },
 
@@ -162,6 +171,7 @@ export const Defense = {
         // arrivals so they don't get swarmed mid-cooldown.
         wave.spawnTimer = 1.4;
         const u = UNITS[wave.unitId];
+        const spawnPos = pathPosAt(0);
         ds.attackers.push({
           uid: "atk_" + Math.random().toString(36).slice(2),
           unitId: wave.unitId,
@@ -170,6 +180,11 @@ export const Defense = {
           atk: u.atk, def: u.def, spd: u.spd,
           atkCd: 0, icon: u.icon, name: u.name,
           traits: u.traits || [],
+        });
+        ds.spawnFlashes = ds.spawnFlashes || [];
+        ds.spawnFlashes.push({
+          id: "sf_" + Math.random().toString(36).slice(2),
+          x: spawnPos.x, y: spawnPos.y, t: 0, life: 0.6,
         });
       }
       if (wave.spawned >= wave.count && ds.attackers.length === 0) {
@@ -219,10 +234,21 @@ export const Defense = {
         // Faster cooldown — was 1.0s, now 0.6s. Still slower than the
         // open-field battle 0.5 so the minigame stays distinct.
         d.atkCd = 0.6;
+        const targetPos = pathPosAt(best.prog);
+        // Projectile / swing visual. Ranged units get a flying bolt, melee
+        // get a quick swing slash (rendered the same way but with a tag
+        // the UI uses to switch styling).
+        ds.shots.push({
+          id: "sh_" + Math.random().toString(36).slice(2),
+          fromX: slotPos.x, fromY: slotPos.y,
+          toX: targetPos.x, toY: targetPos.y,
+          t: 0, life: d.range >= 2 ? 0.28 : 0.18,
+          ranged: d.range >= 2,
+          crit: dmg > best.maxHp * 0.3,
+        });
         ds.floats.push({
           id: Math.random().toString(36).slice(2),
-          x: pathPosAt(best.prog).x,
-          y: pathPosAt(best.prog).y,
+          x: targetPos.x, y: targetPos.y,
           text: `-${Math.round(dmg)}`,
           kind: "hit",
           t: 0,
@@ -259,6 +285,12 @@ export const Defense = {
     ds.attackers = ds.attackers.filter((a) => a.hp > 0);
     ds.defenders = ds.defenders.filter((d) => d.hp > 0);
     ds.floats = ds.floats.map((f) => ({ ...f, t: f.t + dt })).filter((f) => f.t < 0.6);
+    ds.shots = (ds.shots || [])
+      .map((s) => ({ ...s, t: s.t + dt }))
+      .filter((s) => s.t < s.life);
+    ds.spawnFlashes = (ds.spawnFlashes || [])
+      .map((s) => ({ ...s, t: s.t + dt }))
+      .filter((s) => s.t < s.life);
 
     if (ds.baseHp <= 0) {
       ds.ended = true;

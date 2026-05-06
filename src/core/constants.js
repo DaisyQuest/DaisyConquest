@@ -9,7 +9,7 @@ export const CONST = {
   BATTLE: {
     LANE_LENGTH: 100,
     TICK_MS: 33,
-    DEFAULT_SPEED: 0.1,    // 10× slower base pace — readable, deliberate; scrub up to 5× from the toolbar
+    DEFAULT_SPEED: 0.05,   // 20× slower base pace — every swing readable; scrub up to 5× from the toolbar
     LANE_COUNT: 3,
     MAX_PER_LANE: 8,
     HERO_REGEN_MP: 1.6,

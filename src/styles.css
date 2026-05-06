@@ -330,6 +330,23 @@ html, body {
   border-bottom: 1px dashed rgba(255,230,170,0.10);
   pointer-events: none;
 }
+/* Per-lane terrain tinting: vanguard front is muddied/trampled, center
+   is the worn high road, reserve is grassy. The colors are very subtle
+   so they read as "this is dirt" rather than "this is decoration." */
+.battlefield .bf-band:nth-child(1) {
+  background:
+    radial-gradient(ellipse 70% 80% at 50% 60%, rgba(80,55,30,0.20), transparent 70%),
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0 2px, transparent 2px 12px);
+}
+.battlefield .bf-band:nth-child(2) {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 50%, rgba(120,95,55,0.16), transparent 70%);
+}
+.battlefield .bf-band:nth-child(3) {
+  background:
+    radial-gradient(ellipse 70% 80% at 50% 40%, rgba(70,90,50,0.18), transparent 70%),
+    repeating-linear-gradient(-30deg, rgba(40,80,30,0.06) 0 2px, transparent 2px 14px);
+}
 .battlefield .bf-band-label {
   position: absolute; left: 12px; top: 6px;
   font-family: var(--font-display);
@@ -397,6 +414,43 @@ html, body {
   50%      { stroke-opacity: 0.95; stroke-width: 4.5; }
 }
 
+/* === Defense field === */
+.defense-field {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(190,160,100,0.55), transparent 65%),
+    radial-gradient(ellipse at 70% 80%, rgba(110,90,55,0.55), transparent 65%),
+    linear-gradient(180deg, #b8a070 0%, #8c7050 100%);
+  overflow: hidden;
+}
+/* A second decorative layer with grass-like flecks. Pure CSS — small
+   repeating gradients give the parade-ground a "field" texture without
+   any image asset. */
+.defense-ground {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background:
+    repeating-radial-gradient(circle at 20% 30%,
+      rgba(70,90,40,0.18) 0 1px, transparent 1px 12px),
+    repeating-radial-gradient(circle at 70% 70%,
+      rgba(70,90,40,0.18) 0 1px, transparent 1px 14px),
+    repeating-linear-gradient(115deg,
+      rgba(0,0,0,0.04) 0 2px, transparent 2px 24px);
+  mix-blend-mode: multiply;
+}
+/* Path flow — animates strokeDashoffset so the dashed center stripe
+   reads as motion toward the gate. SVG dashoffset works fine for CSS
+   animation in all evergreen browsers. */
+@keyframes defensePathFlow { to { stroke-dashoffset: -24; } }
+.defense-path-flow { animation: defensePathFlow 2.4s linear infinite; }
+
+/* Gate HP bar — when the gate is critically wounded, the bar pulses so
+   the player can't miss the threat. */
+@keyframes gateCriticalPulse {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(216,80,58,0.4)); }
+  50%      { filter: drop-shadow(0 0 10px rgba(216,80,58,0.95)); }
+}
+.gate-bar.critical { animation: gateCriticalPulse 0.9s ease-in-out infinite; }
+
 /* Enemy march — the recent-move arrows breathe slightly so they read as
    "live" rather than static decoration. */
 @keyframes enemy-march {
@@ -413,6 +467,19 @@ html, body {
 .bf-fighter {
   transition: left 160ms ease-out, top 220ms ease-out;
   will-change: transform, filter;
+}
+/* Soft ground shadow under every fighter — sells the "standing on the
+   field" look without a 3D engine. Sized off the fighter's footprint
+   via percentages, sits behind the fighter via z-index trickery. */
+.bf-fighter::after {
+  content: "";
+  position: absolute;
+  left: 10%; right: 10%;
+  bottom: -10px; height: 8px;
+  background: radial-gradient(ellipse, rgba(0,0,0,0.45), transparent 75%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
 }
 @keyframes bfIdle {
   0%, 100% { transform: translate(-50%, -50%) translateY(0); }
@@ -608,6 +675,55 @@ html, body {
   100% { transform: translateY(0) scale(1);       opacity: 1; }
 }
 .battle-intro { animation: battleIntro 360ms ease-out; }
+
+/* Hit sparks — small four-spoke star bursts that explode outward when
+   a swing connects. Two layered radial gradients give a hot core and
+   cooler glow; pseudo-element draws the cardinal-direction flares.
+   Crits switch the palette to gold; big hits scale up. */
+.bf-spark-burst {
+  position: absolute;
+  width: 32px; height: 32px;
+  pointer-events: none;
+  z-index: 7;
+  background:
+    radial-gradient(circle, rgba(255,250,210,0.95) 0%, rgba(220,200,160,0.55) 35%, transparent 65%);
+  border-radius: 50%;
+  filter: drop-shadow(0 0 4px rgba(255,240,180,0.6));
+  animation: bfSparkBurst 360ms ease-out forwards;
+}
+.bf-spark-burst::before {
+  content: "";
+  position: absolute; inset: -8%;
+  background:
+    linear-gradient(0deg,   transparent 47%, rgba(255,250,210,0.95) 50%, transparent 53%),
+    linear-gradient(90deg,  transparent 47%, rgba(255,250,210,0.95) 50%, transparent 53%),
+    linear-gradient(45deg,  transparent 48%, rgba(255,235,170,0.75) 50%, transparent 52%),
+    linear-gradient(-45deg, transparent 48%, rgba(255,235,170,0.75) 50%, transparent 52%);
+  animation: bfSparkBurstSpokes 360ms ease-out forwards;
+}
+.bf-spark-burst.crit {
+  background:
+    radial-gradient(circle, rgba(255,235,140,0.98) 0%, rgba(255,180,80,0.7) 35%, transparent 65%);
+  filter: drop-shadow(0 0 7px rgba(255,200,90,0.9));
+}
+.bf-spark-burst.crit::before {
+  background:
+    linear-gradient(0deg,   transparent 45%, rgba(255,240,170,0.98) 50%, transparent 55%),
+    linear-gradient(90deg,  transparent 45%, rgba(255,240,170,0.98) 50%, transparent 55%),
+    linear-gradient(45deg,  transparent 47%, rgba(255,210,100,0.85) 50%, transparent 53%),
+    linear-gradient(-45deg, transparent 47%, rgba(255,210,100,0.85) 50%, transparent 53%);
+}
+.bf-spark-burst.big   { width: 46px; height: 46px; }
+.bf-spark-burst.crit.big { width: 56px; height: 56px; }
+@keyframes bfSparkBurst {
+  0%   { transform: translate(-50%, -50%) scale(0.35); opacity: 1; }
+  60%  { transform: translate(-50%, -50%) scale(1.0);  opacity: 0.85; }
+  100% { transform: translate(-50%, -50%) scale(1.5);  opacity: 0; }
+}
+@keyframes bfSparkBurstSpokes {
+  0%   { transform: scale(0.6) rotate(0deg); opacity: 1; }
+  100% { transform: scale(2.2) rotate(40deg); opacity: 0; }
+}
 
 /* Center-screen cast banner. Pops in fast, holds, then fades. The
    key on the React node restarts this animation each cast. */

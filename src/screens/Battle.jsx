@@ -92,8 +92,10 @@ function BattleArena({ pb, state, dispatch }) {
   const fxRef = useRef({ hit: {}, lunge: {}, dying: {}, lastEventLen: 0 });
   // Battlefield-wide effects: shake timestamp, AOE burst markers, heal
   // sparkles, death poofs (parallel array so we don't lose them when the
-  // dying fighter unmounts), edge flashes for ability casts and hero pain.
-  const [vfx, setVfx] = useState({ shakeT: 0, bursts: [], sparkles: [], poofs: [] });
+  // dying fighter unmounts), edge flashes for ability casts and hero pain,
+  // and hit-sparks (steel-on-steel sparkles spawned at every meaningful
+  // hit so the player feels weight on each swing).
+  const [vfx, setVfx] = useState({ shakeT: 0, bursts: [], sparkles: [], poofs: [], sparks: [] });
   // Center-screen "cast banner" — a single, big, animated readout when an
   // ability fires. Holds the most recent cast and a timestamp; React keys
   // the element off the timestamp so the CSS animation replays each cast.
@@ -118,6 +120,7 @@ function BattleArena({ pb, state, dispatch }) {
     const bursts = [];
     const sparkles = [];
     const poofs = [];
+    const sparks = [];
     for (let i = start; i < events.length; i++) {
       const ev = events[i];
       if (ev.kind === "hit") {
@@ -126,6 +129,19 @@ function BattleArena({ pb, state, dispatch }) {
         if (attacker) fxRef.current.lunge[ev.from] = now;
         const target = findF(ev.to);
         if (target && ev.dmg > target.maxHp * 0.25) shake = Math.max(shake, 1);
+        // Spark burst at the target — bigger and gold-tinted for crits,
+        // smaller silver puffs for plain hits. We skip sub-2 damage chip
+        // hits so the field doesn't strobe in dense fights.
+        if (target && ev.dmg >= 2) {
+          sparks.push({
+            id: `sp_${i}_${target.uid}`,
+            xPct: ((target.x + (target.jitterX || 0)) / CONST.BATTLE.LANE_LENGTH) * 100,
+            yPct: (target.lane + 0.5) * 33.33 + (target.jitterY || 0) * 12,
+            crit: !!ev.isCrit,
+            big: ev.dmg > target.maxHp * 0.25,
+            t: now,
+          });
+        }
         if (target?.kind === "hero" && target.side === "L") {
           // Player hero took meaningful damage — flash portrait + red edge.
           edge = "red";
@@ -209,12 +225,13 @@ function BattleArena({ pb, state, dispatch }) {
       // best-effort cleanup; another tick may add a new flash before this runs
       void t;
     }
-    if (shake || bursts.length || sparkles.length || poofs.length) {
+    if (shake || bursts.length || sparkles.length || poofs.length || sparks.length) {
       setVfx((prev) => ({
         shakeT: shake ? now : prev.shakeT,
-        bursts: [...prev.bursts.filter((b) => now - b.t < 600), ...bursts],
+        bursts:   [...prev.bursts.filter((b) => now - b.t < 600), ...bursts],
         sparkles: [...prev.sparkles.filter((s) => now - s.t < 600), ...sparkles],
-        poofs: [...prev.poofs.filter((p) => now - p.t < 600), ...poofs],
+        poofs:    [...prev.poofs.filter((p) => now - p.t < 600), ...poofs],
+        sparks:   [...prev.sparks.filter((s) => now - s.t < 500), ...sparks],
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -601,6 +618,17 @@ function BattleArena({ pb, state, dispatch }) {
             Persists past the fighter's unmount so the player sees it. */}
         {vfx.poofs.map((p) => (
           <div key={p.id} className="bf-death-poof" style={{ left: `${p.xPct}%`, top: `${p.yPct}%` }} />
+        ))}
+
+        {/* Hit sparks — steel-on-steel sparkles. Crits get the gold tint
+            (and a slightly bigger burst); big hits get a wider radius;
+            chip hits get a small silvery puff. */}
+        {vfx.sparks.map((s) => (
+          <div
+            key={s.id}
+            className={`bf-spark-burst${s.crit ? " crit" : ""}${s.big ? " big" : ""}`}
+            style={{ left: `${s.xPct}%`, top: `${s.yPct}%` }}
+          />
         ))}
 
         {bs.floats.map((fl) => {

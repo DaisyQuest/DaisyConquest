@@ -448,6 +448,9 @@ function DefenseMinigame() {
             defenders: prev.defenders.map((d) => ({ ...d })),
             waves: prev.waves.map((w) => ({ ...w })),
             availableDefenders: prev.availableDefenders.map((s) => ({ ...s })),
+            shots: (prev.shots || []).slice(),
+            spawnFlashes: (prev.spawnFlashes || []).slice(),
+            floats: prev.floats.slice(),
           },
           dt
         )
@@ -538,18 +541,87 @@ function DefenseMinigame() {
         </div>
         <div className="row gap-3 center">
           <span className="pill">Wave {Math.min(ds.waves.length, ds.waveIdx + 1)}/{ds.waves.length}</span>
-          <span className="pill" style={{
-            background: ds.baseHp < 30 ? "var(--blood)" : "var(--bg-3)",
-            color: ds.baseHp < 30 ? "#fff" : "var(--ink)",
-          }}>🏰 {ds.baseHp}</span>
+          {/* Gate HP bar — stones-and-mortar styling so it reads as a
+              fortress, not a generic pill. Pulses red when the gate is
+              critically wounded so the player feels the danger. */}
+          <div
+            className={`gate-bar${ds.baseHp < 30 ? " critical" : ""}`}
+            title={`Gate ${ds.baseHp} / ${ds.maxBaseHp || 150}`}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <span style={{ fontSize: 16 }}>🏰</span>
+            <div style={{
+              position: "relative",
+              width: 110, height: 14,
+              background: "rgba(8,4,2,0.7)",
+              border: "2px solid var(--line)",
+              borderRadius: 4,
+              overflow: "hidden",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 1px 2px rgba(0,0,0,0.4)",
+            }}>
+              <div style={{
+                position: "absolute", inset: 0,
+                width: `${Math.max(0, ds.baseHp / (ds.maxBaseHp || 150)) * 100}%`,
+                background: ds.baseHp < 30
+                  ? "linear-gradient(180deg, #d4503a, #7a1f1f)"
+                  : "linear-gradient(180deg, #c8a070, #7a5a32)",
+                transition: "width 240ms ease-out, background 240ms ease-out",
+              }} />
+              {/* Stone seam markings — three vertical hairlines so the
+                  bar reads as masonry, not a generic progress bar. */}
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "repeating-linear-gradient(90deg, transparent 0 26px, rgba(0,0,0,0.35) 26px 27px)",
+                pointerEvents: "none",
+              }} />
+            </div>
+            <span className="numeric" style={{ fontSize: 12, fontWeight: 800 }}>
+              {ds.baseHp}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div style={{ flex: 1, position: "relative", background: "linear-gradient(180deg, #b8a070, #8c7050)" }}>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-          <path d={pathD} stroke="rgba(42,29,18,0.4)" strokeWidth="6" fill="none" strokeLinejoin="round" strokeLinecap="round" />
-          <path d={pathD} stroke="#d4b885" strokeWidth="3" fill="none" strokeDasharray="2 2" strokeLinejoin="round" strokeLinecap="round" />
-          <circle cx="100" cy="40" r="4" fill="var(--gold)" stroke="var(--line)" strokeWidth="0.5" />
+      <div className="defense-field" style={{ flex: 1, position: "relative" }}>
+        {/* Painted ground — repeating textures sell the parade-ground look
+            and let the path read as a worn track instead of a doodle. */}
+        <div className="defense-ground" />
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+        >
+          {/* Worn path: shadow band + sand fill + center stripe.
+              The center stripe animates its dashoffset so the path
+              reads as flowing toward the gate. */}
+          <path d={pathD} stroke="rgba(42,29,18,0.55)" strokeWidth="8" fill="none" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={pathD} stroke="#d4b885" strokeWidth="5" fill="none" strokeLinejoin="round" strokeLinecap="round" />
+          <path
+            className="defense-path-flow"
+            d={pathD}
+            stroke="#7a5828" strokeWidth="0.8" fill="none"
+            strokeDasharray="2 2.5"
+            strokeLinejoin="round" strokeLinecap="round"
+            opacity="0.7"
+          />
+          {/* Spawn marker (left edge) — bone arch the wave pours out of. */}
+          <g transform={`translate(${Defense.PATH[0].x - 1}, ${Defense.PATH[0].y - 4})`}>
+            <rect x="0" y="0" width="2" height="8" fill="#3a2a1a" rx="0.4" />
+            <rect x="-1" y="-1" width="4" height="2" fill="#5a3e22" rx="0.4" />
+            <rect x="-0.6" y="0.6" width="3.2" height="0.8" fill="rgba(0,0,0,0.5)" />
+          </g>
+          {/* Gate at the end — the keep the player is defending. Stones,
+              gold trim, and a small banner crowning the finish line. */}
+          <g transform={`translate(${100 - 1}, ${40 - 6})`}>
+            <rect x="-7" y="0" width="9" height="12" fill="#3a2a1a" rx="0.6" />
+            <rect x="-6.2" y="0.5" width="7.4" height="11" fill="#7a5e3e" rx="0.4" />
+            <rect x="-6.2" y="0.5" width="7.4" height="2" fill="#a07a4a" />
+            <rect x="-6.2" y="6"   width="7.4" height="0.6" fill="rgba(0,0,0,0.4)" />
+            <rect x="-3.5" y="2"   width="3" height="6" fill="#1a0c08" rx="1" />
+            <polygon points="-7,0 -2.5,-3 2,0" fill="#a08050" />
+            <rect x="-1" y="-3.5" width="0.4" height="3" fill="#3a2a1a" />
+            <polygon points="-0.6,-3.4 1.4,-2.6 -0.6,-1.8" fill="var(--gold)" />
+          </g>
           {/* Persistent range rings on every placed defender — keeps it
               easy to see who covers what during a fight. */}
           {ds.defenders.map((d) => {
@@ -581,6 +653,55 @@ function DefenseMinigame() {
               pointerEvents="none"
             />
           )}
+
+          {/* Wave spawn flashes — a brief expanding ring at the gate every
+              time a new attacker walks through. Tells the player a new
+              foe just entered before the icon resolves. */}
+          {(ds.spawnFlashes || []).map((sf) => {
+            const r = 2 + (sf.t / sf.life) * 6;
+            const op = 1 - (sf.t / sf.life);
+            return (
+              <circle
+                key={sf.id}
+                cx={sf.x} cy={sf.y} r={r}
+                fill="none"
+                stroke="#c44a4a" strokeWidth="0.7"
+                strokeOpacity={op * 0.85}
+                pointerEvents="none"
+              />
+            );
+          })}
+
+          {/* Projectiles / swings. Ranged shots draw the leading half of
+              their flight as a hot streak and a small head where it just
+              landed; melee swings draw a stubby slash arc instead. */}
+          {(ds.shots || []).map((s) => {
+            const k = Math.min(1, s.t / s.life);
+            const headX = s.fromX + (s.toX - s.fromX) * k;
+            const headY = s.fromY + (s.toY - s.fromY) * k;
+            const tailK = Math.max(0, k - 0.45);
+            const tailX = s.fromX + (s.toX - s.fromX) * tailK;
+            const tailY = s.fromY + (s.toY - s.fromY) * tailK;
+            const op = 1 - k * 0.7;
+            const color = s.crit ? "#ffd86a" : (s.ranged ? "#fff5d8" : "#ffe1c0");
+            return (
+              <g key={s.id} pointerEvents="none">
+                <line
+                  x1={tailX} y1={tailY} x2={headX} y2={headY}
+                  stroke={color}
+                  strokeWidth={s.ranged ? (s.crit ? 1.2 : 0.8) : 1.6}
+                  strokeOpacity={op}
+                  strokeLinecap="round"
+                />
+                {s.ranged && (
+                  <circle
+                    cx={headX} cy={headY} r={s.crit ? 1.0 : 0.7}
+                    fill={color} fillOpacity={op}
+                  />
+                )}
+              </g>
+            );
+          })}
         </svg>
 
         {slots.map((s) => {
